@@ -1,0 +1,652 @@
+# NautilusTrader 1.228.0 Beta
+
+> 本文档为 [English 原文](../RELEASES.md) 的中文翻译版本。如有歧义请以英文原版为准。
+
+发布日期：TBD (UTC).
+
+### 功能增强
+- 为区块链适配器添加 BSC 链支持，注册 `UniswapV3` 与 `PancakeSwapV3` DEX
+- 添加 Aerodrome Slipstream 池事件签名和解析器，用于在 Base 上引导和回放
+- 添加结构化 `PoolProfilerError`，携带池 ID、区块、交易 / 日志索引和事件类型
+- 为 Rust 交易和系统命令结构体添加 `correlation_id` 字段，用于请求追踪
+- 添加 Cap'n Proto 和适配器拆分对交易命令 `correlation_id` 的传递
+- 添加 `nautilus-plugin` crate，用于在实盘节点启动时加载单独编译的 Rust cdylib（Rust）
+- 通过 `PluginCustomData` trait 与 `nautilus_plugin!` 宏添加自定义数据插桩点（Rust）
+- 通过 `PluginActor` trait 添加 Actor 插桩点，支持生命周期与数据回调（Rust）
+- 通过 `PluginStrategy` trait 添加策略插桩点，提供 `HostVTable` 订单命令面（Rust）
+
+### 破坏性变更
+- 将 `PoolProfiler::initialize` 与 `check_if_initialized` 改为返回 `Result` 而非断言
+- 将 Rust 命令的 `new` 构造函数改为接收 `correlation_id: Option<UUID4>`（旧行为传入 `None`）
+
+### Security
+None
+
+### 问题修复
+- 修复 `BacktestEngine` 在关闭时丢失延迟提交命令的问题（Rust）(#4062)，感谢报告者 @zhanghaoda
+- 修复区块链适配器在 `initialize` 返回 `InitialTickMismatch` 时缓存了半初始化 `PoolProfiler` 的问题
+- 修复 Aerodrome Slipstream `AmmType` 从 `StableSwap` 误标为 `CLAMM` 的问题
+- 修复 `PoolProfiler::update_position` 预校验活跃流动性，使失败时池状态保持不变
+- 修复 Betfair Rust 适配器快照订单簿增量发出零成交量 `Add` 条目的问题
+- 修复 Betfair Rust 适配器成交量缓存对赌注取消和非选手调整的处理
+- 修复 Python `ShutdownSystem` 字典序列化以正确往返 `correlation_id`（此前会被丢弃）
+
+### 内部改进
+- 添加 Hyperliquid `flatten` 二进制工具，取消挂单并平掉永续合约持仓
+- 添加 Hyperliquid Criterion 基准测试组，覆盖入站管道、执行管道和分发（Rust）
+- 添加 `cargo machete` 预提交钩子，检测未使用的工作区依赖
+- 添加 cargo 约定检查，识别陈旧的 `[package.metadata.cargo-machete]` 忽略条目
+- 添加 `try_liquidity_math_add`，与会 panic 的版本一同返回结构化 `LiquidityMathError`
+- 添加 DEX 事件签名 / 解析器在所有已注册链上的一致性测试
+- 添加 `PoolProfiler` 上溢 / 下溢路径和 Display 格式的结构化错误覆盖测试
+- 添加 Cap'n Proto、Arrow 和 msgpack 序列化中 `correlation_id` 的往返测试
+- 在工作区范围启用 `unreachable_pub` rustc lint，防止死代码公开
+- 实现 OKX `DataClient::unsubscribe_instrument` 重写，消除拆卸时的缺失处理器警告
+- 将 Interactive Brokers 的 `nautilus-execution` / `nautilus-network` 依赖移到 `execution` 特性后
+- 优化 Hyperliquid 热路径并附带基准测试报告
+- 优化 Hyperliquid 适配器在 WebSocket 处理器、解析和签名模块中的热路径
+- 移除 Hyperliquid 中无用的 WebSocket 编解码模块
+- 移除 `nautilus-interactive-brokers` 中未使用的 `async-stream` 和 `indexmap` 依赖
+
+### 文档更新
+None
+
+### 弃用
+None
+
+---
+
+# NautilusTrader 1.227.0 Beta
+
+发布日期：18th May 2026 (UTC).
+
+### 功能增强
+- 为聚合 K 线（bar）添加连续期货支持 (#3921)，感谢 @faysou
+- 添加 `purge_instrument` 缓存方法，用于清理未使用的标的 (#3945)，感谢报告者 @fedoraiver
+- 为 Rust `LiveNode` 运行时添加 `LoggerConfig.file_config` 与 `clear_log_file` 支持 (#3955)，感谢 @filipmacek
+- 添加 `LoggerConfig` Python 构造函数，可直接构造而无需 `from_spec` (#3955)，感谢 @filipmacek
+- 为 `ExecTesterConfig` 添加 `limit_aggressive` 与 `test_modify_rejected` 标志，用于可成交 / 修改拒绝测试
+- 添加 `CompositeMarketMaker` 示例策略，使用订单簿中点报价并叠加合成信号偏移（Rust）
+- 添加 `#[custom_data_field(json)]` 用于支持 JSON 后端的 Arrow Serde 字段，以及 PyO3 `IndexMap` / `HashMap` 字典转换 (#4003)，感谢 @faysou
+- 为 `DataActor.subscribe_signal` 添加 `priority` 参数，实现订阅者间的有序派发（Rust 与 PyO3）
+- 添加 `Cache::order_owned`，返回拥有所有权的 `OrderAny` 快照，便于跨边界传递（Rust）
+- 添加 `Cache::account_mut`、`account_owned`、`account_for_venue_owned`，返回 `AccountRefMut` / `AccountAny`（Rust）
+- 添加 `Cache::position_mut` 和 `position_owned`，返回 `PositionRefMut` / `Position`（Rust）
+- 添加 `PortfolioSnapshot` 事件，按账户发布盯市估值，通过 `snapshot_interval_ms` 门控（Rust）
+- 添加 `Portfolio::build_snapshot` 和 `Portfolio::snapshots` 访问器，以及每账户有界环形缓冲区（Rust）
+- 在 `events.portfolio` 上添加 `subscribe_portfolio_snapshot` 和 `publish_portfolio_snapshot` 消息总线 API（Rust）
+- 添加 `subscribe_positions` 消息总线函数（Rust）
+- 添加 `InstrumentId::parse_parent_components` 和 `InstrumentClass` 父级后缀转换方法，并通过 PyO3 暴露（Rust）
+- 为 `LiveNodeConfig` 和适配器客户端配置添加 serde `Deserialize` 支持，可从 TOML 加载
+- 添加 Betfair Rust 适配器重连后的批量状态对账，通过 `STREAM_RECONCILING` 暂停提交
+- 添加 Betfair Rust 适配器 `stream_gap_recovery_lookback_mins` 配置，用于对账回溯窗口
+- 添加 Binance Spot 在 schema 3:4 SBE 订单响应中捕获 `expiryReason` 字段（Rust）
+- 添加 Binance Spot 行情和交易 WebSocket 流中的 `serverShutdown` 事件处理（Rust）
+- 添加 Binance USDM 标记价格移动平均（`ap`）字段到 `BinanceFuturesMarkPriceMsg`（Rust）
+- 添加 Bybit 对冲模式下交易所持仓 ID 在订单、持仓和成交事件中的支持
+- 添加 Bybit BBO 订单支持，用于线性合约和反向合约的限价订单
+- 添加 Bybit `flatten` 二进制工具，取消挂单并平掉 Linear / Inverse 持仓
+- 添加 Bybit 标的信息中的 `symbolId`、`symbolType`（包含 `xstocks` / `stock` / `forex` / `commodity`）和现货 `xstockMultiplier` 字段（Rust）
+- 添加 Bybit REST `BybitPosition` 与 WS `BybitWsAccountPosition` 上的持仓 `openTime` 字段（Rust）
+- 添加 Bybit `execution.fast` 私有 WebSocket 频道支持，包含精简负载结构和 `FillReport` 派发（Rust）
+- 添加 Coinbase 在强平 / ADL 警告中识别强制平仓订单事件
+- 添加 Coinbase CFM 在缓冲低于 20% 时的强平缓冲警告
+- 为 Databento 数据加载器和历史客户端添加 `set_price_precision` 和 `get_price_precisions` 方法
+- 添加 Deribit `auto_load_missing_instruments` 配置标志，在订阅时延迟加载未缓存的标的
+- 添加 Deribit DVOL 自定义数据订阅 (#4069)，感谢 @graceyangfan
+- 通过 `request_funding_rates` HTTP 方法和 PyO3 绑定添加 dYdX 历史资金费率请求
+- 添加 Hyperliquid HIP-4 outcome 标的：`+E` / `#E` 编码、USDH 结算和双边 BinaryOption 建模
+- 通过现货余额添加 Hyperliquid HIP-4 outcome 对账；Rust 客户端上的 `outcomeMeta` 结算派发
+- 添加 Hyperliquid HIP-4 `userOutcome` 操作（split、merge、mergeQuestion、negate）和场内 `Settlement` 成交解析
+- 添加 Hyperliquid `allMids` 自定义数据订阅，可选 dex 元数据 (#4067)，感谢 @graceyangfan
+- 添加 Kraken Spot 保证金交易支持 (#3965)，感谢 @mcgrj
+- 通过 WebSocket v2 添加 Kraken Spot L3 订单簿支持 (#4041)，感谢 @mcgrj
+- 添加 Kraken Spot WebSocket v2 订单提交 (#4007)，感谢 @mcgrj
+- 添加 OKX X-Perp（`ruleType=xperp`）期货支持，含资金费率订阅
+- 通过 `slippage_pct` 订单参数添加 OKX 市价单 `slippagePct` 参数
+- 添加 OKX 事件合约支持
+- 添加 Polymarket `OrderStatusReport.filled_qty` 在终结 `Filled` 状态时的 dust 对齐，吸收场内截断
+- 添加 Polymarket `PolymarketFeeModel` 回测费用模型，含 maker 返佣推断
+- 添加 Polymarket `PolymarketDataLoader.sanitize_info` 标志，剥离已解决市场上的结算字段
+
+### 破坏性变更
+- 按先前弃用计划移除遗留适配器环境标志；改用 `environment` 枚举
+- 移除订单类型的 `From<OrderInitialized>`；改用 `TryFrom`，通过 `try_from` / `try_into` 暴露不变式错误
+- 移除 Polymarket `SNAP_UNDERFILL_ULPS` 与 `SNAP_OVERFILL_ULPS`；回退到单一 `DUST_SNAP_THRESHOLD` 常量
+- 移除陈旧的 Tardis `crypto-com-derivatives` 交易所变体
+- 重命名 Binance 与 Kraken 环境，从 `Mainnet` / `MAINNET` 改为 `Live` / `LIVE`
+- 在 `DataEngineConfig` / `LiveDataEngineConfig` 中将 `time_bars_origins` 配置参数重命名为 `time_bars_origin_offset`（Rust）
+- 将 `Cache::mut_order` 重命名为 `order_mut`；接收 `&mut Cache` 并返回 `OrderRefMut<'_>`（Rust）
+- 将 `Cache::order` 和 `orders_*` 改为返回 `OrderRef<'_>`（newtype 借用，原为 `&OrderAny`）（Rust）
+- 将 `Cache::account`、`account_for_venue`、`accounts` 改为返回 `AccountRef<'_>`（原为 `&AccountAny`）（Rust）
+- 将 `Cache::position`、`position_for_order`、`positions_*` 改为返回 `PositionRef<'_>`（原为 `&Position`）（Rust）
+- 将 `Cache::take_account` 改为从单元格中移出账户，遇到别名时 panic 而非克隆（Rust）
+- 在 `NETTING` OMS 下拒绝带自定义 `position_id` 的 `submit_order` / `submit_order_list`；自定义持仓 ID 改用 `HEDGING`
+- JSON 日志文件扩展名从 `.json` 改为 `.jsonl`；请更新监听 `.json` 的日志收集器 (#3955)，感谢 @filipmacek
+- Python 订单 `create()` 方法在无效 `OrderInitialized` 时改为抛出 `ValueError` 而非 panic
+- 默认 `TransportBackend` 改为 `Sockudo`；保留旧默认行为请设置 `backend = Tungstenite`
+- `nautilus-network` 默认 Cargo 特性现在包含 `transport-sockudo`
+- 将 `nautilus-model` 的 `arrow` 改为可选特性；启用 `arrow`（或 `python-arrow`）保留旧行为 (#4008)，感谢 @sunlei
+- `OrderMatchingEngineConfig` 默认值调整为与 Cython 每引擎构造函数一致（Rust）
+- `Strategy` 订单方法改为接收 `Option<Params>`，避免不必要的 `IndexMap` 分配（Rust）；传 `None` 或 `Some(params)`
+- `Strategy::cancel_order` 与 `modify_order` 改为接收 `ClientOrderId` 而非 `OrderAny`（Rust v2）
+- `Strategy::cancel_orders` 改为接收 `Vec<ClientOrderId>` 而非 `Vec<OrderAny>`（Rust v2）
+- Rust 策略注册现在在显式策略 ID 后追加 `order_id_tag`，与 Cython 对齐
+- Binance Futures 优先使用 `DEMO` 端点进行模拟交易
+- Databento 数据加载器在精度未解析时报错；请传入 `price_precision` 或调用 `set_price_precision`
+- Kraken Spot 拒绝 `DEMO`；演示模式仍仅 Futures 可用
+- `nautilus_core::from_pydict` 从 `Py<PyDict>` 改为 `&Py<PyDict>`，避免移动输入字典（Rust）(#4003)，感谢 @faysou
+- `DataActor::subscribe_signal` 改为接收 `priority: Option<u32>`；现有调用者需传 `None`（Rust）
+- 消息总线订阅的 `priority` 从 `u8` 改为 `u32`，与 Cython `int priority` 对齐（Rust）
+- `OrderFactory::bracket` 改为 `bon` 构建器，提供 per-leg 的 `entry_*` / `tp_*` / `sl_*` 设置器；调用 `factory.bracket()...call()`（Rust）
+
+### Security
+- 为 Docker 容器镜像发布的 digest 添加 Sigstore SBOM 证明
+- 添加 CI 烟雾测试，发布后验证 wheel、sdist 与 Docker 镜像签名
+- 移除长期 `PACKAGES_TOKEN` PAT，改为按 job 使用 GHCR `GITHUB_TOKEN`
+- 强化 CI 发布签名链：固定 cosign 工具，在合并 job 添加 `harden-runner`
+- 强化夜间合并身份验证，将 token 保存到 git extraheader 而非 remote URL
+- 强化 PyPI 发布，使用 OIDC 可信发布，消除长期 API token
+- 强化 Python 依赖：在 `[tool.uv].no-build-package` 中固定所有第三方包，使丢失的 wheel 让 `uv lock` 失败而不是回退构建 sdist
+- 升级 `urllib3` 到 v2.7.0（GHSA-mf9v-mfxr-j63j 解压炸弹绕过、GHSA-qccp-gfcp-xxvc 跨主机代理头泄漏）
+- 修复 `DatabaseConfig` repr 完整脱敏密码 (#4028)，感谢 @faysou
+- 在 `SECURITY.md` 中记录 Sigstore 签名与 SBOM 验证命令
+
+### 问题修复
+- 修复 `ExecutionEngine::handle_order_fill` 中 OTO 父订单成交时的 `RefCell` 重入 panic (#3981)，感谢报告者 @GreatLandmark
+- 修复 `ExecutionEngine::load_cache` 中嵌套 `borrow_mut` 调用的 `RefCell` 重入
+- 修复 `Portfolio::update_position` 中当 `calculate_account_state` 为 true 时的 `RefCell` 双借用 panic
+- 修复 `#[serde(tag = "type")]` 枚举内和 `serde_json::Value` 通过 `Cow<'de, str>` 拥有字符串支持的标识符反序列化
+- 修复 `AccountsManager::update_balances` 通过修改已 drop 的克隆而丢弃重新计算的余额
+- 修复保证金账户余额在平仓和反向成交时未应用已实现价格盈亏 (#4056)，感谢 @faysou
+- 修复 Rust 投资组合账户事件克隆开销 (#4004)，感谢报告者 @magnified103
+- 修复保证金 `AccountState` 事件在余额已填充时发出空余额
+- 修复 `allow_cash_borrowing` 在模拟场所初始化时未应用到已缓存的现金账户
+- 修复 cache 场所订单 ID 更新以及取消重发流程的 own-book 清理（Rust）
+- 修复 `Cache::orders_for_exec_algorithm` 在应用交集时丢弃查询过滤器（Rust）
+- 修复 `OwnOrderBook` 对已对账的外部挂单的跟踪（Rust）
+- 修复格式错误 `OrderInitialized` 导致的 `OrderAny::from_events` panic；对账现在返回 `Err` 而非崩溃
+- 修复 `BacktestEngine` 未启用账户上的 `calculate_account_state` (#3988)，感谢报告者 @magnified103
+- 修复 `BacktestEngine` 在关闭前未结算 `on_stop` 命令 (#4062)，感谢报告者 @zhanghaoda
+- 修复 `MessageBus` 后期通配符订阅在已缓存主题上漏掉事件 (#3942)，感谢报告者 @graceyangfan
+- 修复 `OrderMatchingEngine` 向 `MatchingCore` 传播 tick-size (#3942)，感谢报告者 @graceyangfan
+- 修复 `OrderMatchingEngine` 来自已关闭撮合核心订单的重复成交 (#4075)
+- 修复 `OrderMatchingEngine.reset` 在重置间泄漏 `OrderBook.ts_last`（Python）(#3992)，感谢 @YeeTsai
+- 修复沙盒 tick-size 精度竞态，可能在陈旧 tick 上 panic (#3994)，感谢 @graceyangfan
+- 修复撮合引擎和沙盒对陈旧精度报价和成交 Tick 的处理 (#4044)，感谢 @graceyangfan
+- 修复 bracket SL / TP 在提交时被撮合引擎拒绝（Rust）(#4040)，感谢报告者 @maximsamsonov
+- 修复 `ExecutionEngine` 对账在报告和订单均已 `ACCEPTED` 时跳过 `OrderUpdated`
+- 修复 `ExecutionEngine` `subscribe_venue_instruments` 通过类型化发布者路由，确保适配器接收标的更新
+- 修复执行成交对账的账户作用域和重复成交 ID（Rust）
+- 修复场内快照同时携带成交不一致和数量 / 价格修订时的对账漂移（Rust）
+- 修复对账在场内确认前过早发出针对待定场内状态的 `OrderUpdated`（Rust）
+- 修复对账缺失 `MarketIfTouched` / `LimitIfTouched` 价格和触发漂移检测（Rust）
+- 修复实盘持仓对账跨账户混淆持仓 (#4029)，感谢 @faysou
+- 修复实盘持仓对账在同一标的的不同账户上重试 / 节流泄漏（Python 与 Rust）
+- 修复实盘持仓对账在同一标的的多账户上塌缩持仓（Rust）
+- 修复 `Strategy` / `Actor` 在 dispose 时时钟回调泄漏 (#3967)，感谢报告者 @frslvr
+- 修复 `Strategy` 待取消和待更新事件在订单命令之前（Rust）
+- 修复 `Strategy` submit 方法在 cache 更新前发布 `OrderInitialized`（Rust）
+- 修复 `ExecTester` LIT 定价方向，使对账后的 BUY / SELL LIT 订单满足 `trigger_price` 不变式
+- 修复 wrangler v2 时间戳分辨率，在 int64 转换前强制纳秒，兼容 pandas 3 (#3970)，感谢 @gzenz
+- 修复自定义数据 parquet schema 注册与多文件查询 (#4021)，感谢 @faysou
+- 修复 `custom_data` 宏的 PyO3 stub 生成：将 `gen_stub` 排在 `pyo3` 属性之上，并检测被 `cfg_attr` 包裹的调用
+- 修复 catalog `consolidate_data_by_period` 对已跳过目标的清理 (#4080)，感谢 @arpankapoor
+- 修复包含 & 符号的标识符的 SQL `ParserError` (#4025)，感谢 @arpankapoor
+- 修复 `DataEngine` 在注册时将订阅 / 取消订阅命令路由到 `BACKTEST` 客户端（Rust）
+- 修复 `DataEngine` 将 `validate_data_sequence` 应用到内部聚合器发出的 K 线（Rust）
+- 修复 `emit_quotes_from_book` 与 `emit_quotes_from_book_depths` 配置标志被静默忽略（Rust）
+- 修复 `DataEngine` 复合订单簿订阅未将每标的的增量 / 深度路由到对应订单簿（Rust）
+- 修复 `DataEngine` 复合 + 精确订单簿订阅在共享缓存订单簿上的双重应用（Rust）
+- 修复 `DataEngine` 取消订阅时在仍有精确主题订阅者的情况下断开客户端（Rust）
+- 修复 `DataEngine` K 线聚合器报价 / 成交订阅优先级（Rust）
+- 修复 `DataEngine::reset` 在重置间泄漏订单簿和期权链状态（Rust）
+- 修复 `DataActor` 复合订单簿增量订阅未接收按标的发布（Rust）
+- 修复 Architect AX `GET /order-status` 按 v14.0.1 改用 `oid` / `cid`；遗留 `order_id` / `client_order_id` 现返回 HTTP 400
+- 修复 Binance Futures 仅减仓订单未对账场内数量（Python 与 Rust）(#3983)，感谢报告者 @KaizynX
+- 修复 Binance Spot 对已删除 IOC 订单的进行中 REST 轮询 (#4072)，感谢报告者 @marcelmdn
+- 修复 Binance WebSocket pong 未处理 `RuntimeError` 在服务器关闭后阻塞重连 (#4020)，感谢报告者 @M-at-ti-a
+- 修复 Bybit 模糊提交失败等待对账，感谢报告者 @shorino
+- 修复 Bybit BBO 订单未在缓存订单状态中对账场内解析价格（Rust 与 Python）
+- 修复 Bybit 共享 `tickers.linear` WS 主题上日期期货的资金费率解析；现在仅对 `CryptoPerpetual` 启用 (#4084)
+- 修复 Betfair Rust 适配器在重连时通过从缓存重新同步成交跟踪器避免成交丢失
+- 修复 Betfair Rust 适配器在空白 `customerOrderRef` / `rfo` 上的 panic，通过将空字符串规范化为 `None`
+- 修复 Betfair Rust 适配器在 OCM 已上报终态后的虚假 `OrderRejected`
+- 修复 Betfair Rust 适配器 `ignore_external_orders` 将空 `rfo` 字符串与缺失同等处理
+- 修复 Databento 行情价格精度保留 (#4002)，感谢 @faysou
+- 修复 Databento MBP10 在未定义深度级别上的 panic (#4046)，感谢报告者 @prajjwal23
+- 修复 Databento 解码器在 dbn 0.58 wire 数据上的空缺：跳过 `'I'`（Index）类并映射新的统计类型 14-20
+- 修复 dYdX FOK 与 DAY 有效期订单在提交前拒绝，避免在场内失败或映射为 GTC
+- 修复 dYdX MIT / LIT 在 Indexer 将两个变体合并到 `TAKE_PROFIT` 下时的对账往返
+- 修复 dYdX GTD 过期在 WS 和 HTTP 对账路径上均产生 `OrderExpired`
+- 修复 dYdX 在 `condition_type` 未设置时的 `TriggerType` 默认值，使对账不再拒绝报告
+- 修复 dYdX `TAKE_PROFIT` 订单类型反序列化（Indexer 省略 `_LIMIT` 后缀）
+- 修复 dYdX 对账噪声，本地缓存中已处于终态的订单不再上报
+- 修复 dYdX Python `_request_instrument(s)` 将完整 `_handle_data_response` 参数集传递
+- 修复 dYdX Python `_subscribe_order_book_depth` 优雅警告而非抛出 `NotImplementedError`
+- 修复 Deribit `StopMarket` 在订单响应省略 `filled_amount` 时的 `OrderRejected` (#3995)，感谢报告者 @marco-rigoni
+- 修复 Deribit 跨保证金重复计算；`equity` 上报总额，`available_withdrawal_funds` 上报可用 (#4009)，感谢 @filipmacek
+- 修复 Deribit 订阅对未缓存标的静默丢弃数据 (#4035)，感谢报告者 @linimin
+- 修复 Deribit 资金费率日志垃圾，永续频道更新在每次 tick 都发出 info/debug (#4083)
+- 修复 Deribit 和 Hyperliquid 自定义数据在没有 `arrow` 特性时的构建
+- 修复 Hyperliquid 部分成交后修改向取消重发腿发送绝对数量，导致引擎超额成交 (#3986)
+- 修复 Hyperliquid 测试网订单被"Builder fee has not been approved"拒绝，类似 vault 订单省略 builder 归属 (#3989)
+- 修复 Hyperliquid 并发修改时虚假 `OrderCanceled`（Python 与 Rust）(#3971)，感谢 @M-Advis
+- 修复 Hyperliquid 取消重发成交竞争对陈旧本地订单状态发出 `OrderFilled`（Python 与 Rust）(#3972)
+- 修复 Hyperliquid 在订单缓存前丢弃 `FillReport`；成交现在缓冲并在 `OrderAccepted` 时排空 (#4076)，感谢 @M-Advis
+- 修复 Hyperliquid 在 submit / cancel / modify 失败时的终态拒绝；延迟到 WS 对账（Python 与 Rust），感谢 @M-Advis
+- 修复 Hyperliquid Rust 数据客户端重连后消费循环停留在断开后被取消的 token 上
+- 修复 Interactive Brokers 价差成交竞争 (#3957)，感谢 @taozle
+- 修复 Interactive Brokers 回调顺序竞争 (#3976)，感谢 @faysou
+- 修复 Interactive Brokers 行情数据 farm 重连时未重新订阅数据源 (#3968)，感谢 @onixenix
+- 修复 Interactive Brokers 行情数据在分数 tick size 上的派发 (#4022)，感谢 @faysou
+- 修复 Interactive Brokers 在 stop 和 dispose 时关闭 reader 的 `RuntimeError` (#4023)，感谢 @faysou
+- 修复 Interactive Brokers 在服务器版本握手之前重连 (#4027)，感谢 @faysou
+- 修复 Interactive Brokers SMART 股票场所解析 (#4061)，感谢 @faysou
+- 修复 Kraken Spot 多资产抵押的保证金钱包余额 (#3997)，感谢 @mcgrj
+- 修复 Kraken 符号规范化以兼容 WS v2 (#3961)，感谢 @mcgrj
+- 修复 Kraken Spot WebSocket 派发丢弃缺少 `symbol` 的 delta-only 执行帧 (#4052)，感谢 @mcgrj
+- 修复 Kraken Futures 订单更新批次在场内发出 `"unknown"` 枚举值时反序列化失败
+- 修复 OKX 缺失 `post_only` 标的状态 (#3966)，感谢 @jhavie
+- 修复 OKX 缺失 `rebase` 标的状态 (#3998)，感谢 @jhavie
+- 修复 OKX 期货标的状态解析 (#4005)，感谢 @cryptoSUN2049
+- 修复 Polymarket V2 BUY 超额成交拒绝，通过 WS、REST 和缓冲排空路径上的仅超额成交 `last_qty` 对齐
+- 修复 Polymarket REST 成交路径绕过 dust 规范化，导致引擎状态与场内跨路径分歧
+- 修复 Polymarket 剩余 `ACCEPTED` 订单通过交易历史恢复 (#4024)，感谢报告者 @fedoraiver
+- 修复 Polymarket 适配器在 `tick_size_change` 上的订单簿重新同步 (#3942)，感谢报告者 @graceyangfan
+- 修复 Polymarket 空操作 `tick_size_change` 清空本地订单簿并排入冗余快照（Python 与 Rust）
+- 修复 Polymarket 在取消订阅周期间泄漏陈旧本地订单簿和最后报价（Python 与 Rust）
+- 修复 Polymarket 自动加载标的订阅未接收实时数据 (#4050)，感谢报告者 @d0dge
+- 修复 Polymarket 自动加载在 CLOB 临时 404 和新铸造市场空 `token_id` 时丢弃订阅
+- 修复 Polymarket 市价 IOC 订单作为 FOK 提交 (#4006)，感谢报告者 @fedoraiver
+- 修复 Polymarket WS 订单解析带原因后缀的场内取消 (#3987)，感谢报告者 @Javdu10
+- 修复 Polymarket WebSocket 解析错误日志在非 UTF8 负载上引发次级异常 (#4038)，感谢 @graceyangfan
+- 修复 Polymarket `parse_trades` 在多成交 `transactionHash` 上的 TradeId 冲突（Python 与 Rust）
+- 修复 Polymarket `parse_trades` 在同秒成交上的 `ts_event` 冲突（Python 与 Rust）
+- 修复 Polymarket `fetch_trades` 在历史偏移上限上中止；现在警告并返回部分结果（Python 与 Rust）
+- 修复 Polymarket `load_trades` 在跨页的同秒非确定性排序（Python 与 Rust）
+- 修复 Polymarket Gamma 标的加载限制为 100 个市场 (#4086)，感谢报告者 @haimgel
+- 修复 Tardis 标的元数据解析对编码为字符串的数值字段的处理
+
+### 内部改进
+- 添加 `OrderMatchingCore::update_price_increment` 原语，用于 tick-size 传播一致性（Rust）
+- 添加 `OrderMatchingCore` 上的 `iter_*` API，零分配只读迭代挂单（Rust）
+- 添加 `OrderMatchingCore` 的 Criterion 基准测试套件，覆盖 add / get / delete / iterate 热路径（Rust）
+- 添加 `OwnOrderBook` Rust 模型不变式的属性测试
+- 添加 `ContinuousFutureAdjustmentType` 枚举和 `BarBuilder` 价格调整流水线（Rust）
+- 添加 `BarType` 上的原生 `is_externally_aggregated` / `is_internally_aggregated` 方法（Rust）
+- 添加实盘节点压力测试装置，包含 `trade_burst` 与 `cancel_starvation` 场景（Rust）
+- 添加 `DataEngine` 和 `AsyncRunner` 在成交到缓存路径上的 per-stage 基准测试（Rust）
+- 添加 Python `TradingNode` 一致性压力装置，用于 v1 与 v2 对比
+- 添加 `cargo-flamegraph` 到工作区工具，版本固定
+- 添加 `nautilus-live` 的 `simulation` 特性，使压力装置在 `cfg(madsim)` 下运行以验证 DST
+- 添加 `NautilusKernel::with_cache_database` 构建器 setter 和构造变体，用于注入 cache 数据库适配器（Rust）
+- 添加 `nautilus-event-store` 快照通过 `NautilusKernel` 进行捕获 / 恢复 / 重放，跨运行持久化 cache 状态（Rust）
+- 当 `WebSocketConfig.proxy_url` 设置且选择 Sockudo 时，自动回退到 `Tungstenite`（Rust）
+- 添加类型化 publish_instrument() 到消息总线 (#4081)，感谢 @filipmacek
+- 添加 Binance Futures `-4531`（UM / CM `dualSidePosition` 同步）错误分类器，提示对冲模式（Rust）
+- 添加 `BinanceSpotUserDataEventType` 枚举，用于类型化的 Spot 用户数据事件派发（Rust）
+- 在 `TradingNodeConfig` 中添加 Interactive Brokers PyO3 实盘客户端配置支持 (#3964)，感谢 @faysou
+- 添加 Interactive Brokers Rust 适配器对 v2 实盘交易的支持 (#3974)，感谢 @faysou
+- 添加 Interactive Brokers 每订单交易所路由参数 (#4079)，感谢 @faysou
+- 改进 `#[custom_data]` 支持仅实盘 JSON 类型，无需 Arrow 注册
+- 改进 `DataEngine.reset` 清理订单簿更新器、快照器、期权链管理器和定时器（Rust）
+- 改进 `DataEngine` 为复合符号订单簿订阅创建每标的订单簿（Rust）
+- 改进 Rust 流 Feather 到 parquet 转换中的对象物化 (#3954)，感谢 @faysou
+- 改进 cache 订单存储到 per-order `Rc<RefCell<OrderAny>>` 单元，关闭陈旧克隆 bug 类别（Rust）
+- 改进 `OwnBookLadder` 将错误日志延迟到调用者，消除重复 own-book 错误噪声
+- 改进 `DataEngine` / `DataActor` 批量响应：debug 级别摘要，trace 级别全量；Bybit、OKX、BitMEX 原始 WS 帧同样
+- 改进 `OrderMatchingEngine` 跟踪止损激活使用 `OrderMatchingCore` `iter_*` API（Rust）
+- 改进 `OrderMatchingEngine.iterate` 单订单循环以对齐跟踪止损和 GTD 时序与 Cython（Rust）
+- 改进 `OrderMatchingEngine` 队列位置成交门控以匹配 Cython 的穿越成交（Rust）
+- 改进 `OrderMatchingEngine.iterate` 出价 / 询价重置门控以兑现在途交易覆盖（Rust）
+- 改进 `update_balance_multi_currency` 将负余额执行委托给每账户 `update_balances`
+- 改进实盘 exec 客户端在取消任务因断开而中止时以 ERROR 记录并提示 `timeout_post_stop`
+- 改进 `ExecTester` 在 modify / cancel-replace 前从缓存刷新已跟踪订单以看到场内 ack
+- 改进 `make build` 通过本地可编辑 `.pth` 让 venv 可从任意 cwd 导入 `nautilus_trader`
+- 改进 Betfair Rust 适配器在 debug 级别抑制延迟 HTTP 接受
+- 改进 Betfair Rust 适配器抑制喧闹的 `instrument_close` 订阅 / 取消订阅警告
+- 改进 Betfair Rust HTTP 客户端 `connect()` 在已认证时短路并序列化并发调用
+- 改进 Betfair Rust HTTP 客户端 `disconnect()` 取消在途重试并安装新的取消 token
+- 改进 Betfair Rust `unsubscribe_book_deltas` 日志级别为 `warn` 以匹配 Python 可见性
+- 改进 Betfair Rust 适配器，显式 info 级别 no-op 重写不支持的取消订阅方法
+- 改进 Betfair Rust 集成测试覆盖 OCM、replace 流、批量操作和会话恢复
+- 改进 Hyperliquid 数据客户端跟踪派生的订阅任务，在断开 / 重置时中止（Rust）
+- 改进 Interactive Brokers Python 3.14 安装和集成测试覆盖
+- 重新生成 Binance Spot SBE 编解码器对应 schema 3:4
+- 优化数据引擎请求工作流 (#3928)，感谢 @faysou
+- 优化 Hyperliquid 数据客户端，提取 `parse_l2_book_snapshot` 帮助函数用于直接单元测试（Rust）
+- 优化 `Cache` 订单与持仓查询方法为单次按大小排序的交集遍历（Rust）
+- 优化 `Cache::*_count` 方法通过索引计数而无需物化排序 `Vec`（Rust）
+- 优化 `OrderMatchingCore` 存储，按价格 - 时间优先级将 `BTreeMap` 限价 / 止损订单簿按方向拆分（Rust）
+- 优化实盘节点带偏选择，使 exec 命令优先于行情数据派发（Rust）
+- 优化实盘节点循环，将六个维护定时器合并为一个共享维护派发器（Rust）
+- 将 Interactive Brokers 适配器加固修复移植到 Rust (#4073)
+- 升级 `alloy` crate 到 v2.0.4
+- 升级 `databento` crate 到 v0.51.0
+- 升级 `redis` crate 到 v1.2.1
+- 升级 `tokio` crate 到 v1.52.3（修复性能回归）
+
+### 文档更新
+- 添加 DST 文档警告，关于进程级懒状态 RNG 消费和 `CacheView` 工厂阻塞
+- 添加 Bybit 对冲模式文档，附官方 `positionIdx` API 链接
+- 添加 Bybit BBO 订单文档，含参数和示例
+- 添加 Databento 文档说明价格精度优先级和发布者映射
+- 添加 Deribit DVOL 和 Hyperliquid `allMids` 适配器文档
+- 添加 Polymarket 成交数量规范化章节，解释 dust 对齐、延迟 dust 和手续费语义
+- 添加 dYdX 适配器笔记关于 FOK 弃用、DAY 拒绝、equity-tier 限制和 MIT / LIT 往返
+- 添加适配器时间戳转换约定，涵盖 ms-to-ns 助手和 `ts_event` 与 `ts_init`
+- 添加 Rust 共享可变性存储指南，将 `Rc<RefCell<T>>` 决策树加入开发者指南
+- 改进 Hyperliquid 集成指南，标记 Rust-only 执行配置选项并附范围内滑点说明
+- 在回测指南中添加 `Shutdown semantics` 章节，涵盖 `on_stop` 命令结算
+- 更新适配器文档和示例改用环境枚举替代遗留测试标志
+
+### 勘误
+- 7 个 0.57.0 crate 通过 API token（而非 OIDC）手动发布，由于 `publish-cargo-crates.sh` 中的拓扑排序 bug
+- 受影响：`nautilus-{analysis,common,execution,network,portfolio,testkit,trading}`；已在 v1.228.0 修复
+
+---
+
+# NautilusTrader 1.226.0 Beta
+
+发布日期：29th April 2026 (UTC).
+
+### 功能增强
+- 添加 `Portfolio::mark_values`、`equity` 和 `missing_price_instruments` 查询，覆盖 Rust 和 Python
+- 添加 `instrument_status` / `instrument_statuses` 缓存查询并在数据引擎中自动缓存 (#3858)
+- 为 BitMEX、Deribit、dYdX、Hyperliquid 和 OKX 适配器添加 `environment` 枚举配置
+- 在 `BybitDataClientConfig` 和 `BybitExecClientConfig` 中添加 `BybitEnvironment`
+- 在 `LiveExecEngineConfig` 中添加缺失的配置值 (#3841)，感谢 @Javdu10
+- 为 `ExecutionClient` 添加 `calculate_commission`，用于场所特定对账成交
+- 为 `DataEngineConfig`、`ExecutionEngineConfig` 和 `OrderEmulatorConfig` 添加 PyO3 绑定，使其可从 Python 构造
+- 为 `BacktestEngineConfig` Python 构造函数添加 `cache`、`msgbus`、`data_engine`、`exec_engine` 和 `portfolio` 关键字参数
+- 添加 `MarginAccount.margin_for_currency` + `margin_init/maint_for_currency` 助手用于跨保证金查询
+- 添加 `MarginAccount.total_margin_init(currency)` / `total_margin_maint(currency)` 汇总两个保证金桶
+- 添加 `MarginAccount.account_margins`、`account_margins_init/maint` 和 `clear_account_margin` 访问器
+- 添加 `transport-sockudo` 特性和 `TransportBackend` 运行时选择器用于 WebSocket 传输（Rust）
+- 添加 `TransportBackend` PyO3 枚举和 `WebSocketConfig.backend` 关键字参数，用于从 Python 选择后端
+- 在 sockudo 后端上添加自定义升级头支持，使适配器在两个后端上携带相同的 `User-Agent` 和每场所头 (#3932)，感谢 @sunlei
+- 添加 `WebSocketConfig.proxy_url`，支持 HTTP `CONNECT` 代理隧道与 basic-auth
+- 为 `BettingInstrument` 添加 Betfair 分层 tick scheme，用于阶梯对齐定价
+- 添加 Binance Futures `use_trade_lite` 配置以选用低延迟 `TRADE_LITE` 成交（Rust，默认 `False`）
+- 添加 Binance `proxy_url` 透传，覆盖行情和用户数据 WS 流 (#3937)，感谢报告者 @huangqingchi
+- 添加 Bybit 用户相关端点 (#3894)，感谢 @sunlei
+- 添加 Bybit `BybitPositionIdx` 枚举和 `bybit_resolve_position_idx` PyO3 助手
+- 添加 Coinbase 初始集成适配器（Rust）
+- 在 `nautilus_trader.adapters.dydx` 包上重新导出 `DydxNetwork`
+- 通过 `fundingHistory` info 端点添加 Hyperliquid 历史资金费率
+- 添加 Hyperliquid 可配置 MARKET 滑点（`market_order_slippage_bps`），支持每订单覆盖
+- 添加 Hyperliquid `OrderBookDepth10` 订阅，由 `l2Book` 数据源支持
+- 通过 `subscribe_params` 添加 Hyperliquid `nSigFigs` / `mantissa` L2 精度控制
+- 添加 Interactive Brokers Rust 适配器和 PyO3 兼容层 (#3864)，感谢 @faysou
+- 添加 Kraken xStocks 代币化资产支持，覆盖现货行情、订单提交和期货标的
+- 添加 OKX 期权希腊字母支持，覆盖 Black-Scholes 和 price-adjusted 约定，每次 tick 都生效
+- 添加 OKX `params["greeks_convention"]`（字符串或列表）以缩小期权希腊字母订阅范围
+- 添加 OKX `transport_backend` 配置，在 `Tungstenite` 和 `Sockudo` 后端间切换 websocket
+- 添加 Polymarket game_id 和 fee_schedule 到标的信息 (#3811)，感谢 @Javdu10
+- 通过 `POST /orders` 添加 Polymarket 批量 `SubmitOrderList`，用于限价订单批次（Rust）
+- 添加 Polymarket WebSocket `idle_timeout_ms` 用于僵尸检测 (#3908)，感谢报告者 @camarigor
+- 添加 Polymarket WebSocket `proxy_url` 透传
+- 添加 Polymarket `pUSD` 抵押货币（Rust 中 `Currency::pUSD()`，Python 中 `pUSD`），用于 CLOB V2 切换
+- 添加可配置 `compression` 用于 Tardis Machine 重放，默认 `zstd`
+- 添加 `ExecutionReport::OrderWithFills` 和 `send_order_with_fills` 发射器，用于打包状态 + 成交对账
+- 在 Binance、Bybit、OKX、BitMEX、Hyperliquid、Deribit 和 dYdX 上添加 ADL / 强平检测和日志
+- 添加 Binance Futures COIN-M `delivery_autoclose-` 前缀识别，用于到期合约自动平仓事件
+- 添加 Bybit `adlRankIndicator` 警告日志，当未平仓持仓排名 4 或更高时（紧邻 deleverage）
+- 添加 Hyperliquid 强平元数据记录于成交，以及 `userEvents.liquidation` 路由
+- 添加 Hyperliquid `Auto-Deleveraging` 成交检测，在 HTTP 和 WebSocket 路径上以 warn 级别记录
+
+### 破坏性变更
+- 为 Rust `Portfolio::unrealized_pnls`、`realized_pnls`、`total_pnls` 添加 `Option<&AccountId>`；传 `None` 保持先前行为
+- 为 `WebSocketConfig` 添加 `backend: TransportBackend`；结构体字面量调用者必须添加字段（Rust）
+- 为 `WebSocketConfig` 添加 `proxy_url: Option<String>`；结构体字面量调用者必须添加字段（Rust）
+- 将 Polymarket 适配器迁移到 CLOB V2：新 EIP-712 域、新交易所合约、重塑订单字段、pUSD 抵押，Python 侧使用 `py-clob-client-v2`
+- 整合适配器 HTTP 和 WebSocket 代理透传到单一 `proxy_url` 字段，取代此前 Rust 和 Python 配置中的 `http_proxy_url` / `ws_proxy_url` 分离
+- 移除 `DockerizedIBGatewayConfig::from_env_or_defaults`（Rust）；改用 bon 构建器或 `Default::default`，仍会回退到 `TWS_USERNAME` / `TWS_PASSWORD`
+- 移除 `OrderMatchingEngineConfig::new` 和 `with_price_protection_points`（Rust）；改用 `OrderMatchingEngineConfig::builder()`
+- 移除 `BlockchainDataClientConfig::new`、`BlockchainExecutionClientConfig::new` 和 `DexPoolFilters::new`（Rust）；改用对应的 `::builder()`
+- 移除 `DeribitExecClientConfig::new` 和 `HyperliquidExecClientConfig::new` 便捷构造函数（Rust）；改用 `::builder()`
+- 移除 `DataEngineConfig::new` 12 参数位置构造函数（Rust）；改用 `DataEngineConfig::builder()`
+- 移除保证金适配器的合成 `ACCOUNT-*` 占位符；`MarginBalance` 仅按货币发出
+- 移除 `nautilus_system::factories` 模块；从 `nautilus_common::factories` 导入工厂 trait（Rust）
+- 从 `nautilus-common` 默认特性中移除 `indicators`；启用 `features = ["indicators"]`（Rust）
+- 将 Python `DatabaseConfig.timeout` 重命名为 `connection_timeout`，`response_timeout` 与 Redis / PyO3 wire schema 匹配
+- 在 `AxDataClientConfig` 和 `AxExecClientConfig`（Rust 和 Python）中将 `is_sandbox: bool` 替换为 `environment: AxEnvironment`，与 Binance / Bybit / Kraken 适配器模式对齐。默认是 `Sandbox`。
+- `BacktestEngine::add_venue` 和 `SimulatedExchange::new`（Rust）改为接收 `SimulatedVenueConfig`（bon 构建器）
+- Interactive Brokers Rust 配置改用 bon 构建器：`InteractiveBrokersDataClientConfig`、`InteractiveBrokersExecClientConfig`、`InteractiveBrokersInstrumentProviderConfig` 和 `DockerizedIBGatewayConfig`
+- `get_cached_bybit_http_client` 签名变更：将 `demo` / `testnet` bool 替换为 `environment: BybitEnvironment`
+- `UnsubscribeBookSnapshots` 现在要求 `interval_ms` 用于精确快照间隔取消订阅（Rust）
+- `OrderError::Invariant` 变体改为包装 `CorrectnessError` 而非 `anyhow::Error`（Rust）
+- `HyperliquidEip712Signer::new()` 改为返回 `Result` 并接收 `&EvmPrivateKey`（Rust）
+- `HyperliquidExchangeRequest::new/with_vault` 改为直接接收 `HyperliquidSignature`（Rust）
+- Binance USD-M Futures WebSocket URL 从 `/ws` 改为 `/market/ws` 和 `/private/ws`
+- Cap'n Proto 和 SBE wire 格式更改以保留 `Option` 状态（不稳定，可能变更）
+- Python 和 Serde 后端 Rust 配置解码改为拒绝未知字段，过时或拼错的键现在在配置解析时快速失败
+- `MarginBalance.instrument_id` 改为可选；`None` 标记按货币键入的账户范围（跨保证金）条目
+- `MarginAccount.margins_init` / `margins_maint` 改为仅按标的；跨保证金使用 `account_margins_*`
+- Binance Futures COIN-M 改为每个基础币种发出一个 `MarginBalance`（此前硬编码 USDT）
+- 撮合引擎 `TradeId` 格式从 `{venue}-{raw_id}-{count}` 改为 `T-{hash}-{count}`；以 `ts_init` 为键
+- `use_random_ids` 不再管控 `TradeId`；该标志仍影响 `VenueOrderId` 和 `PositionId`
+- 工作区 `nautilus-live` 改为 `default-features = false`；启用 `features = ["node"]` 以使用 `LiveNode`（Rust）
+- 适配器 `LiveNode` 示例需要 `--features examples` 才能构建（Rust）
+- `ParquetDataCatalog::to_object_path` 和 `to_object_path_parsed` 改为返回 `anyhow::Result`，跨存储 URI 现在以错误形式暴露而非静默重写到 catalog bucket（Rust）
+- 带前缀的远程 catalog（`s3://bucket/base/path`）现在在其声明的 URI 前缀下读写；将此前写入 bucket 根的数据移到前缀下 (#3930)
+
+### Security
+- 强化 Binance Ed25519 凭证检测，base64 HMAC 密钥不再被识别为 Ed25519 密钥（Rust）
+- 强化 Binance HTTP 请求签名，在查询字符串中对 Ed25519 签名进行 URL 编码（Rust）
+- 用 in-tree `nautilus_core::urlencoding` 替换第三方 `urlencoding` crate，缩小供应链表面（Rust）
+- 提升安全相关 GitHub Actions（`harden-runner`、`codeql-action`、`setup-uv`、`setup-rust-toolchain`）的固定 SHA 到当前上游版本
+- 刷新 `cargo-deny` 和 `osv-scanner` 公告配置；移除陈旧的 `pygments` 公告忽略（上游已修补）
+
+### 问题修复
+- 修复 sockudo WebSocket 后端在服务器将首帧搭在 101 响应上时丢弃握手剩余字节 (#3932)，感谢 @sunlei
+- 修复账户状态再生在实盘和回测路径上每次成交丢弃账户范围保证金
+- 修复 `AccountState` 接受空 `balances` 和 `margins`
+- 修复 `OrderMatchingEngine` 中通过 `IndexMap` 的 `FillModel` 确定性 (#3914)，感谢报告者 @timkoopmans
+- 修复跨精度模式的报价中点原始算术 (#3849)，感谢 @BurnOutTrader
+- 修复执行算法 spawn 订单中的 `quote_quantity` 传播 (#3845)，感谢 @dxwil
+- 修复 `FORCE_STOP` 上的流式回测关闭确定性 (#3920)
+- 修复 `mark_values` / `equity` 在关闭转换时按基础货币键入；现在按结算货币键入
+- 修复 `PortfolioAnalyzer` `MaxDrawdown` / `CAGR` / `CalmarRatio` 上的 AttributeError (#3941)，感谢报告者 @a1zb2yc3z
+- 修复 `TimeBarAggregator` 中的 `stop_timer` (#3822)，感谢 @faysou
+- 修复 `RiskEngine` 将基础 `min_quantity` / `max_quantity` 边界应用到以 quote 计价的订单
+- 修复回测 `OrderMatchingEngine` 将 `quote_quantity=True` 订单视作 base 数量；quote 名义额现在在成交模拟前转换为 base 数量 (#3873)，感谢报告者 @fedoraiver
+- 修复回测中 `subscribe_option_chain` 在启动时挂起 (#3938)，感谢报告者 @aaurix
+- 修复回测期权到期成交未出现在 cache 和成交报告中 (#3939)，感谢报告者 @hotelmike
+- 修复回测物理期权指派以开仓权利金平掉期权腿 (#3948)，感谢报告者 @hotelmike
+- 修复 `DataBackendSession` 在流式自定义数据类型时的 GIL 死锁 (#3847)，感谢报告者 @GianC0
+- 修复 `BacktestNode` 流式混合内置和自定义数据类型 (#3853)，感谢报告者 @GianC0
+- 修复 `DataBackendSession` 分块流式造成 RSS 增长的内存泄漏 (#3889)，感谢报告者 @GianC0
+- 修复订单簿快照订阅保留精确 `(instrument_id, interval_ms)` 语义，用于共享间隔和精确取消订阅处理（Rust）(#3823)，感谢报告者 @dwolfesberger
+- 修复 Bybit、OKX 和 Deribit 重连期间的 WebSocket 认证状态 (#3820)，感谢报告者 @KaizynX
+- 修复 WebSocket `idle_timeout_ms` 在 `Ping` / `Pong` 保活帧上的重置 (#3907)，感谢报告者 @camarigor
+- 修复 `TradingNodeConfig.parse` 在原始配置解码时丢弃可导入的实盘客户端配置 `path` 和 `factory` 字段
+- 修复市价类止损订单上的 `OrderTriggered` ValueError (#3812)，感谢报告者 @jindrichsirucek
+- 修复 `consolidate_data_by_period` 在 fragment-per-flush catalog 上的成对合并 (#3857)，感谢报告者 @M-Advis
+- 修复 `consolidate_data_by_period` 在重复运行和跨越合并窗口的横跨文件上销毁数据，Rust catalog 后端同步 (#3883)，感谢 @M-Advis
+- 修复 `ParquetDataCatalog.get_intervals(identifier=None)` 在按标识符数据上的行为 (#3903)，感谢报告者 @GianC0
+- 修复 `ParquetDataCatalog.consolidate_data` 在 start/end 范围不与任何文件重叠时引发 `IndexError`，以及 `consolidate_catalog_by_period` 在首个无法识别的目录上中止循环而非跳过 (#3910)，感谢报告者 @M-Advis
+- 修复远程 catalog 在 URI 前缀下的对象路径，使 `s3://bucket/base/path`（和其他远程方案）下的写入和读取不再塌缩到 bucket 根 (#3930)，感谢 @fedoraiver
+- 修复 S3 后端自定义数据查询和远程 Feather 发现 (#3931)，感谢报告者 @fedoraiver
+- 修复 `FeatherWriter` 在前导 `CLEAR` 增量上写入 0-precision 元数据 (#3913)，感谢报告者 @fedoraiver
+- 修复 `TradingNode` 干净关闭时来自 `CancelledError` 的空错误日志 (#3862)，感谢报告者 @jxstanford
+- 修复 `Symbol` 和 `PositionId` 反序列化非 ASCII 转义字符串 (#3893)，感谢报告者 @volemont
+- 修复执行引擎忽略 `submit_order` 中用户提供的 `position_id`（Rust）
+- 修复 `ExecutionEngine` leg-fill 持仓事件未发布给订阅者 (#3939)
+- 修复 cache 加载在部分成交时崩溃后未修复 OTO 偶发子级 `position_id`（Rust）
+- 修复 `TestDataGenerator.generate_trade_ticks` 使用随机 UUID4；现在按 `T-{idx}` 顺序生成确定性 ID
+- 修复对账 ID 在重启间非确定性 (#3878)，感谢报告者 @peanut-copilot
+- 修复对账合成 `OrderStatusReport` 现在将成交价格传播到 `avg_px` 用于下游推断成交
+- 修复 `reconcile_fill_report` 对未知订单丢弃成交；现在为场所关闭引导外部订单
+- 修复通过 `ParquetDataCatalog` 的 PyO3 `InstrumentStatus` 持久化和回测流 (#3855)
+- 修复 PyO3 `LiveNode` `request_bars()` 历史回调在启动预热期间被丢弃 (#3825)，感谢 @BurnOutTrader
+- 修复 PyO3 `DataActor` 缺少 `on_historical_funding_rates` 和 `on_historical_data` 转发 `None`
+- 修复 PyO3 crypto 标的的 `from_dict` 对未注册基础 / 标的代码 (#3882)，感谢报告者 @volemont
+- 修复 PyO3 catalog `instruments()` 在未注册货币上失败 (#3898)，感谢报告者 @volemont
+- 修复 PyO3 `from_dict` 在非 ASCII 字符串上的处理，通过在 `json.dumps` 中使用 `ensure_ascii=False` (#3895)，感谢 @costajohnt
+- 修复 Betfair 事件顺序：`Instrument` 现在在每个 MCM 内先于 `InstrumentStatus` / `InstrumentClose` 发出
+- 修复 Betfair 被划掉的选手（`Removed` / `RemovedVacant`）仅在市场关闭时发出关闭；现在立即触发
+- 修复 Betfair 非快照订单簿增量内联发出；现在跟在 trades / tickers 之后，与 Python 语义匹配
+- 修复 Betfair BSP 增量在订单簿增量之前发出；现在在每个 MCM 内跟在订单簿增量之后
+- 修复 Betfair 订单拒绝原因丢弃指令级 `errorMessage` 详情
+- 修复 Betfair `query_order` 通过 `customer_order_ref` 和 `bet_id` 查找发出状态报告（Rust）
+- 修复 Binance 用户数据流在 keepalive 失败后未恢复 (#3861)，感谢报告者 @KaizynX
+- 修复 Binance Futures 用户数据流在 listen key 轮换时丢失事件 (#3861)，感谢报告者 @KaizynX
+- 修复 Binance Futures WebSocket 交易，通过强制 `@aggTrade` (#3861)，感谢报告者 @KaizynX
+- 修复 Binance Futures 交易所生成的成交丢失真实 `trade_id` 和 `commission`，通过打包状态 + 成交
+- 修复 Binance Ed25519 检测器静默接受 base64 HMAC 密钥作为 Ed25519 密钥（Rust）
+- 修复 Binance HTTP 请求 Ed25519 签名在查询字符串中的 URL 编码（Rust）
+- 修复 Binance Futures USD-M `cancel_all_orders` 静默失败；通过 HTTP 路由（WS API 不支持）
+- 修复 Binance Futures `TRADE_LITE` 用户数据事件在每次成交时记录"Unknown event type"警告
+- 修复 Binance USD-M Futures WebSocket 路由 `fstream-mm` 和 `fstream-auth` 主机
+- 修复 BitMEX 成交 ID 在 `trdMatchID` 缺失时回退使用随机 UUID4；现在从成交字段哈希
+- 修复 Bybit 演示模式 websocket 数据 URL (#3742)，感谢报告者 @jindrichsirucek
+- 修复 Bybit 已平仓持仓的反序列化 (#3836)，感谢报告者 @pusteckiy
+- 修复 Bybit 永续标的状态在计划下架时发出 `PreClose` (#3829)，感谢 @dxwil
+- 修复 Bybit `load_all_async` 在期权时丢弃 `base_coin` 过滤器 (#3865)，感谢报告者 @Baerenstein
+- 修复 Bybit `InstrumentStatus` 消息被静默丢弃而非转发到数据引擎
+- 修复 Bybit 和 Deribit 期权链示例 `subscribe_option_chain` 调用 (#3887)，感谢 @sunlei
+- 修复 Bybit 有订单但无持仓的账户的保证金缺失 (#3725)，感谢报告者 @marco-rigoni
+- 修复 Bybit JSON pong websocket 帧在分类前未被跳过 (#3936)，感谢 @sunlei
+- 修复 Bybit 对冲模式 `position_mode` 设置时的 `positionIdx` 拒绝 (#3944)，感谢报告者 @pusteckiy
+- 修复 Bybit 执行客户端在连接时未应用配置的杠杆、持仓模式或保证金模式（Rust）
+- 修复 Databento CMBP1 和 TCBBO 成交 ID 使用随机 UUID4 而非成交字段的确定性哈希
+- 修复 Databento 在会话开始后丢弃 `start_ns`；现在记录错误 (#3877)，感谢报告者 @jxstanford
+- 修复 Deribit 标记 / 指数价格订阅在 Python 中静默丢弃数据 (#3821)，感谢报告者 @linimin
+- 修复 Deribit `StopMarket` 在 `market_price` 价格字段上的 `OrderRejected` (#3925)，感谢报告者 @marco-rigoni
+- 修复 dYdX `generate_order_status_report` 仅获取第一个订单并漏掉响应中的后续匹配
+- 修复 dYdX 订单簿快照在增量上缺失 `F_SNAPSHOT` 标志；空簿 Clear 现在发出 `F_SNAPSHOT | F_LAST`
+- 修复 dYdX 交叉簿解析从合成解交叉增量和终止符上剥离 `F_SNAPSHOT`
+- 修复 dYdX 成交 tick 分页 dedup 在跨页边界上漏掉非相邻重复
+- 修复 dYdX 成交 tick 分页从固定区块时间估算溢出目标 `end` 区块
+- 修复 dYdX 交叉簿大小算术使用 `f64` 减法；现在以全精度使用 `Decimal`
+- 修复 dYdX 持仓报告从 `size` 符号覆盖场所 `side`；场所 side 现在端到端保留
+- 修复 dYdX `DydxAdapterConfig` 不论 `network` 都默认主网 URL；添加 `for_network` 助手
+- 修复 Hyperliquid `LiveNode` 在 HIP-3 标的符号含 `*` / `?`（如 `dex:STREAMABCD****-USD-PERP`）时启动 panic，通过在 `InstrumentId.symbol` 中将通配符字节替换为 `x`，同时在 `raw_symbol` 上保留场所官方名称 (#3896)，感谢报告者 @daiwanwei
+- 修复 Hyperliquid bracket 订单提交分组 (#3810)，感谢报告者 @jindrichsirucek
+- 修复 Hyperliquid 修改 cancel-replace 发出陈旧 `OrderCanceled` (#3827)，感谢报告者 @P1YU5H-50N1
+- 修复 Hyperliquid 已平仓订单的状态查询 (#3879)，感谢报告者 @pusteckiy
+- 修复 Hyperliquid 批量取消静默丢弃 per-item 错误 (#3879)，感谢报告者 @pusteckiy
+- 修复 Hyperliquid Rust `query_order` 处理器发出状态报告 (#3879)，感谢报告者 @pusteckiy
+- 修复 Hyperliquid `request_account_state` 丢弃解析后的保证金 (#3725)，感谢报告者 @marco-rigoni
+- 修复 Hyperliquid `cancel_all_orders` 在部分或传输失败时丢弃 per-order 拒绝事件
+- 修复 Hyperliquid `request_trades` 静默返回空；现在显式 bail
+- 修复 Hyperliquid `Auto-Deleveraging` 成交方向反序列化 (#3922)，感谢报告者 @AlphaTraderK
+- 修复 IB Gateway Docker 镜像在 ARM64 宿主上失败 (#3813)，感谢报告者 @Baki-0501
+- 修复 Interactive Brokers 拒绝 combo / spread 净信用成交的负平均成交价格 (#3884)，感谢 @faysou
+- 修复 Interactive Brokers 持仓对账在 `priceMagnifier` 为 `None` 时的 `TypeError` (#3885)，感谢 @davidsblom
+- 修复 Kraken Futures 限价订单 `OrderUpdated` 在 wire `stop_price: 0.0` 被视作触发价格时的 panic
+- 修复 Kraken Futures 快速成交市价订单在订单状态对账时被识别为已拒绝 (#3870)，感谢报告者 @Stamppot82
+- 修复 Kraken Futures 保证金账户余额解析在 Kraken 的 `af` 字段和 `amount - af` 派生值各自按货币精度取整时违反 `AccountBalance` 不变式（`total == locked + free`）
+- 修复 Kraken Spot quote-quantity 订单从未达到终态，由于 base / quote 大小不匹配
+- 修复 Kraken Spot ticker `QuoteTick.ts_event` 使用本地 init 时间而非交易所 `timestamp` 字段 (#3926)，感谢 @ptzafos
+- 修复 Kraken 成交 dedup 在容量上清空整个集合而非驱逐最旧条目
+- 修复 Kraken Futures 保证金解析时 `AccountBalance` 不变式 panic (#3868)，感谢 @Stamppot82
+- 修复 Kraken Futures WebSocket 重连时的重新认证死锁 (#3871)，感谢报告者 @Stamppot82
+- 修复 OKX 期权希腊字母由于 Cython `cdef` 订阅属性不可访问而未转发
+- 修复 OKX 期权希腊字母不论订阅的希腊字母类型都发出 `BlackScholes` 约定
+- 修复 OKX 订单身份注册在并发订单提交时的竞争（Rust）
+- 修复 OKX algo 订单从订单状态对账报告中缺失
+- 修复 OKX 现货保证金持仓对账偏好 USDT / USDC / USD quote 的 `CurrencyPair` 而非其他备选
+- 修复 OKX 指数价格订阅 refcount 在重连和并发过渡间泄漏
+- 修复 OKX 期权摘要订阅 refcount 在订阅失败时未回滚
+- 修复 OKX 来自空 `trade_id` 的重复成交，使用确定性合成 ID 而非随机 UUID
+- 修复 OKX 未映射 `OrderStatus` 和空 `OptionType` 值上的 panic，通过 `TryFrom` 转换（Rust）
+- 修复 OKX `InstrumentStatus` 消息被记录为未处理而非转发到数据引擎
+- 修复 OKX `query_order` 通过合并常规和 algo 订单查找发出状态报告（Rust）
+- 修复 Polymarket 成交的手续费公式和费用来源 (#3838)，感谢报告者 @santivazq
+- 修复 Polymarket 对账成交使用错误的手续费 (#3860)，感谢报告者 @fedoraiver
+- 修复 Polymarket 标的 `min_quantity` 通过限价订单股份规则拒绝市价订单 (#3874)，感谢报告者 @fedoraiver
+- 修复 Polymarket `request_instrument(s)` 通过陈旧 `token_meta` 丢弃 WS (#3900)，感谢报告者 @fedoraiver
+- 修复 Polymarket `parse_to_quote_ticks` 使用变更的层级作为最优盘口 (#3905)，感谢报告者 @camarigor
+- 修复 Polymarket `parse_to_snapshot` 在 CLEAR 和中间 ADD 增量上缺失 `F_SNAPSHOT` 标志
+- 修复 Polymarket `parse_to_deltas` 在每个增量上标记 `F_LAST` 而非仅最后一个
+- 修复 Polymarket `parse_to_trade_tick` 使用 `uuid.uuid4()`，产生非确定性成交 ID
+- 修复 Tardis 稀疏 `book_snapshot_*` 层级的重放处理 (#3953)，感谢报告者 @a1zb2yc3z
+- 修复 Tardis 成交 ID 在场所 `id` 缺失 / 空时回退使用随机 UUID4（CSV 和 WebSocket 解析器）
+
+### 内部改进
+- 添加 `AccountBalance::from_total_and_locked` 和 `AccountBalance::from_total_and_free`，并迁移适配器余额解析以按货币精度保留 `total == locked + free` 不变式（Rust）
+- 添加类型化 `CorrectnessError` 枚举替代 `correctness` 助手中的 `anyhow::Error`（Rust）
+- 添加 `CorrectnessResultExt::expect_display` 用于类型化正确性错误的 display 格式 panic（Rust）
+- 添加确定性模拟测试（DST）重新导出模块，门控在 `simulation` 特性下（Rust）
+- 添加 `nautilus-core` 中的 `wall_clock_now` 缝，用于模拟下的虚拟时间（Rust）
+- 在网络和实盘 crate 的 `tokio::select!` 块中添加 `biased`，用于确定性轮询顺序
+- 添加 `nautilus_network::transport` 模块，含 `Message` / `TransportError` / `WsTransport`，用于未来后端切换（Rust）
+- 在 `nautilus_network` 上添加中性 `Message` / `TransportError` 重新导出，便于未来后端切换（Rust）
+- 在 PyO3 `LiveNodeBuilder` 上添加引擎配置方法 (#3848)，感谢 @BurnOutTrader
+- 为 `SubscribeCommand` 和 `TradingCommand` 添加只读 `params()` 访问器 (#3846)，感谢 @faysou
+- 通过 `commands.system.shutdown` pub/sub 主题添加 `ShutdownSystem` 处理，连接到内核、回测和实盘（Rust）
+- 添加 PyO3 `DataActor` 与 v1 的对等性，覆盖 `publish_data`、`publish_signal`、`subscribe_signal`、`unsubscribe_signal`、`add_synthetic` 和 `update_synthetic`（Rust）
+- 为 `MarginAccount` 添加每货币账户范围保证金存储，按 `instrument_id` 存在性路由事件保证金
+- 添加 Architect AX 单元和集成测试，覆盖执行、请求过滤器和 WebSocket 解析器
+- 添加 dYdX 调试日志到 `generate_order_status_report`，显示过滤范围和 `None` 结果上的 `page_full`
+- 添加 Polymarket `determine_trade_id` 助手，使用 FNV-1a（Rust）和 blake2b（Python）确定性哈希
+- 添加 Hyperliquid criterion 基准测试用于 L1 签名路径
+- 添加 Hyperliquid 集成测试用于资金费率、成交、取消全部和 `handle_l2_book` 路由
+- 添加 Hyperliquid `minTradeSpotNtlRejected` 订单状态和 `Unknown` 强平方法回退
+- 添加 Binance 单元测试用于 spot / futures 派发 dedup、post-only 拒绝和值转换
+- 在 BitMEX 和 Tardis 公共解析模块中添加 `derive_trade_id` FNV-1a 助手，用于确定性回退
+- 在 Databento 解码中为没有原生成交 ID 的 schema 添加 `derive_cmbp_trade_id`
+- 添加 Databento 成交 ID 派生的属性测试（稳定性和 16 位十六进制格式）
+- 添加 Rust / Python 对等测试，固定撮合引擎 `TradeId` 格式跨语言绑定
+- 为 `nautilus-live` 添加 `node` 特性，门控 `builder`、`config`、`manager` 和 `node` 模块（默认开启）
+- 在实盘模块中添加用户提供的 Tokio 运行时支持 (#3918)，感谢 @filipmacek
+- 为 K 线请求和订阅添加连续期货支持 (#3921)，感谢 @faysou
+- 改进 `nautilus-live/defi` 不再拉取 `LiveNode` 编排依赖
+- 改进 CI uv cache，通过 `setup-uv` 自动模式跳过自托管 runner 上的 GHA 上传 (#3933)，感谢 @sunlei
+- 清理未使用的依赖 (#3886)，感谢 @sunlei
+- 改进自托管 runner 上的 CI cache 卫生，含 uv prune、prek 自动门控和占用空间摘要
+- 将 `WebSocketClient` 迁移到 `WsTransport` trait，解耦重连 / 认证与 tungstenite 类型（Rust）
+- 将 Polymarket `PolymarketQuote.best_bid` / `best_ask` 改为可选，匹配 Rust `Option<String>` schema
+- 移植 Interactive Brokers Rust 历史 K 线回放与 Python 一致性修复 (#3892)，感谢 @faysou
+- 标准化适配器示例清单和 trading 依赖 (#3891)，感谢 @sunlei
+- 标准化实盘衍生品适配器的保证金发出约定，使用按货币键入的 `MarginBalance` 条目
+- 将 `reconciliation` 模块重构为 `types`、`ids`、`positions` 和 `orders` 子模块（Rust）
+- 将 Binance Futures 用户数据流派发和 listen key 恢复重构到专用模块（Rust）
+- 将 Binance Futures 值转换重构到新的 `futures::conversions` 模块（Rust）
+- 在 `ExecutionManager` 中将 `AHashMap` / `AHashSet` 替换为 `IndexMap` / `IndexSet`，用于模拟中的确定性排序（Rust）
+- 改进 `nautilus-system` 在适配器 crate 中为可选（由 `python` 门控）；默认构建丢弃重型传递依赖
+- 改进 DST 约定钩子，在 `OrderMatchingEngine` 中强制 `IndexMap`
+- 改进 make cargo-test 不为测试 harness 构建包含二进制 (#3828)，感谢 @faysou
+- 改进 Interactive Brokers combo 成交平均价格计算 (#3834)，感谢 @faysou
+- 改进 Kraken WebSocket 执行派发，通过每产品模块为跟踪订单发出类型化事件
+- 改进 Kraken Spot WS 认证，通过 `AuthTracker` 提供 `is_authenticated` / `wait_until_authenticated` Python API
+- 优化 Hyperliquid L1 签名，通过缓存 `PrivateKeySigner` 和 EIP-712 域 (#3851)
+- 优化 `ClientOrderId` 生成，含缓存前缀缓冲 (#3935)，感谢 @sunlei
+- 优化 `OrderListId` 和 `PositionId` 生成，含缓存前缀缓冲（Rust）
+- 升级 Rust（MSRV）到 1.95.0
+- 升级 Cap'n Proto 到 v1.4.0
+- 升级 `alloy` crate 到 v2.0.1
+- 升级 `capnp` crate 到 v0.25.4（用 4 空格缩进和版本头重新生成 schema）
+- 升级 `databento` crate 到 v0.48.0
+- 升级 `datafusion` crate 到 v53.1.0
+- 升级 `msgspec` 到 v0.21.1
+- 升级 `pyarrow` 到 v24.0.0
+- 升级 `tokio` crate 到 v1.52.1
+
+### 文档更新
+- 添加 Polymarket Python 和 Rust 适配器配置表，并更新速率限制
+- 添加 ID 确定性不变式到对账实盘和执行概念指南
+- 添加成交 ID 派生章节到 Polymarket、Databento、BitMEX 和 Tardis 集成指南
+- 添加成交 ID 派生章节到回测概念指南
+- 添加"权益和盯市估值"章节到组合概念指南
+- 添加 ADL / 强平处理章节到 Binance、Bybit、OKX、BitMEX、Hyperliquid、Deribit、dYdX 指南
+- 添加对账报告章节到执行概念指南
+- 改进文档遵循符号和填充词的样式指南 (#3830)，感谢 @JKDasondee
+- 改进 Interactive Brokers 文档关于 UTC 时间戳 (#3826)，感谢 @faysou
+- 改进 dYdX 集成指南配置表以匹配 Python API（`environment`、`subaccount`、`base_url_grpc`）
+- 更新 Hyperliquid 集成指南，含资金历史、depth10、subscribe_params 和滑点
+- 更新配置概念指南，将未知字段拒绝定义为 Python 和 Rust 的配置标准
+
+### 弃用
+- 弃用 `BybitDataClientConfig` / `BybitExecClientConfig` 上的 `demo` / `testnet` bool —— 改用 `environment`
+- 弃用 `OKXDataClientConfig` / `OKXExecClientConfig` 上的 `is_demo` —— 改用 `environment`
+- 弃用 `HyperliquidDataClientConfig` / `HyperliquidExecClientConfig` 上的 `testnet` —— 改用 `environment`
+- 弃用 `DeribitDataClientConfig` / `DeribitExecClientConfig` 上的 `is_testnet` —— 改用 `environment`
+- 弃用 `DydxDataClientConfig` / `DydxExecClientConfig` 上的 `is_testnet` —— 改用 `environment`
+- 弃用 `BitmexDataClientConfig` / `BitmexExecClientConfig` 上的 `testnet` —— 改用 `environment`
+
+---
+
