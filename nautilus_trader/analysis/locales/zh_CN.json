@@ -65,5 +65,26 @@
   "hover_quantity": "数量: {value:.2f}",
   "account_summary": "账户汇总",
   "not_available": "无",
-  "none": "无"
+  "none": "无",
+  "metrics": {
+    "Returns Volatility (252 days)": "收益率波动率 (252日)",
+    "Average (Return)": "平均收益率",
+    "Average Loss (Return)": "平均亏损率",
+    "Average Win (Return)": "平均盈利率",
+    "Sharpe Ratio (252 days)": "夏普比率 (252日)",
+    "Sortino Ratio (252 days)": "索提诺比率 (252日)",
+    "Profit Factor": "盈亏比",
+    "Risk Return Ratio": "风险收益比",
+    "Long Ratio": "多头占比",
+    "PnL (total)": "总盈亏",
+    "PnL% (total)": "总盈亏率 (%)",
+    "Max Winner": "最大盈利",
+    "Avg Winner": "平均盈利",
+    "Min Winner": "最小盈利",
+    "Min Loser": "最小亏损",
+    "Avg Loser": "平均亏损",
+    "Max Loser": "最大亏损",
+    "Expectancy": "期望值",
+    "Win Rate": "胜率"
+  }
 }

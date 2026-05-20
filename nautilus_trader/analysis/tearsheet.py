@@ -33,6 +33,7 @@ import pandas as pd
 
 from nautilus_trader.analysis import TearsheetChart
 from nautilus_trader.analysis.i18n import t
+from nautilus_trader.analysis.i18n import t_metric
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.core.datetime import format_optional_iso8601
 from nautilus_trader.core.nautilus_pyo3 import NAUTILUS_VERSION
@@ -1155,7 +1156,7 @@ def create_yearly_returns(
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
-            x=yearly.index.year,
+            x=[f"{y.year}.{y.month:02d}" for y in yearly.index],
             y=yearly.values,
             marker={"color": colors},
             hovertemplate="<b>%{x}</b><br>Return: %{y:.2f}%<extra></extra>",
@@ -1368,7 +1369,7 @@ def _create_stats_table(  # noqa: C901
     fill_colors = []
 
     # Helper to add section
-    def add_section(title: str, section_stats: dict[str, Any]) -> None:
+    def add_section(title: str, section_stats: dict[str, Any], translate_metrics: bool = False) -> None:
         if not section_stats:
             return
 
@@ -1379,7 +1380,8 @@ def _create_stats_table(  # noqa: C901
 
         # Add stats from this section
         for metric, value in section_stats.items():
-            metrics.append(metric)
+            display_name = t_metric(metric, locale) if translate_metrics else metric
+            metrics.append(display_name)
             formatted_value = (
                 f"{value:.4f}"
                 if isinstance(value, numbers.Real) and not isinstance(value, bool)
@@ -1408,16 +1410,16 @@ def _create_stats_table(  # noqa: C901
         if first_value is not None and isinstance(first_value, dict):
             # Per-currency PnL stats
             for currency, curr_stats in stats_pnls.items():
-                add_section(t("pnl_statistics_currency", locale, currency=currency), curr_stats)
+                add_section(t("pnl_statistics_currency", locale, currency=currency), curr_stats, translate_metrics=True)
         else:
             # Single currency PnL stats
-            add_section(t("pnl_statistics", locale), stats_pnls)
+            add_section(t("pnl_statistics", locale), stats_pnls, translate_metrics=True)
 
     # 4. Returns Statistics
-    add_section(t("returns_statistics", locale), stats_returns)
+    add_section(t("returns_statistics", locale), stats_returns, translate_metrics=True)
 
     # 5. General/Position Statistics
-    add_section(t("general_statistics", locale), stats_general)
+    add_section(t("general_statistics", locale), stats_general, translate_metrics=True)
 
     return go.Table(
         header={
@@ -1770,7 +1772,7 @@ def _render_yearly_returns(
 
     fig.add_trace(
         go.Bar(
-            x=yearly.index.year,
+            x=[f"{y.year}.{y.month:02d}" for y in yearly.index],
             y=yearly.to_numpy(),
             marker={"color": colors},
             showlegend=False,

@@ -65,5 +65,26 @@
   "hover_quantity": "Quantity: {value:.2f}",
   "account_summary": "Account Summary",
   "not_available": "N/A",
-  "none": "None"
+  "none": "None",
+  "metrics": {
+    "Returns Volatility (252 days)": "Returns Volatility (252 days)",
+    "Average (Return)": "Average (Return)",
+    "Average Loss (Return)": "Average Loss (Return)",
+    "Average Win (Return)": "Average Win (Return)",
+    "Sharpe Ratio (252 days)": "Sharpe Ratio (252 days)",
+    "Sortino Ratio (252 days)": "Sortino Ratio (252 days)",
+    "Profit Factor": "Profit Factor",
+    "Risk Return Ratio": "Risk Return Ratio",
+    "Long Ratio": "Long Ratio",
+    "PnL (total)": "PnL (total)",
+    "PnL% (total)": "PnL% (total)",
+    "Max Winner": "Max Winner",
+    "Avg Winner": "Avg Winner",
+    "Min Winner": "Min Winner",
+    "Min Loser": "Min Loser",
+    "Avg Loser": "Avg Loser",
+    "Max Loser": "Max Loser",
+    "Expectancy": "Expectancy",
+    "Win Rate": "Win Rate"
+  }
 }

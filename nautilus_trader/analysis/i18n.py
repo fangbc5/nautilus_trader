@@ -101,6 +101,44 @@ def t(key: str, locale: str = "en", **kwargs: object) -> str:
     return value
 
 
+def t_metric(name: str, locale: str = "en") -> str:
+    """
+    Translate a performance metric name to the specified locale.
+
+    Looks up the key in the ``metrics`` sub-dictionary of the locale file.
+    If not found, returns the original name unchanged.
+
+    Parameters
+    ----------
+    name : str
+        The metric name (e.g., "Sharpe Ratio (252 days)", "Win Rate").
+    locale : str, default "en"
+        The locale code (e.g., "en", "zh_CN").
+
+    Returns
+    -------
+    str
+        The translated metric name, or the original name if no translation found.
+
+    """
+    if locale not in _cache:
+        _cache[locale] = _load_locale(locale)
+
+    metrics = _cache[locale].get("metrics", {})
+    if isinstance(metrics, dict) and name in metrics:
+        return metrics[name]
+
+    # Fall back to English metrics
+    if locale != "en":
+        if "en" not in _cache:
+            _cache["en"] = _load_locale("en")
+        en_metrics = _cache["en"].get("metrics", {})
+        if isinstance(en_metrics, dict) and name in en_metrics:
+            return en_metrics[name]
+
+    return name
+
+
 def available_locales() -> list[str]:
     """
     List all available locale codes.
