@@ -1674,7 +1674,6 @@ def _render_monthly_returns(
 
 
 def _render_distribution(
-def _render_distribution(
     fig: go.Figure,
     row: int,
     col: int,
