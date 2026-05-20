@@ -32,6 +32,7 @@ from typing import Any
 import pandas as pd
 
 from nautilus_trader.analysis import TearsheetChart
+from nautilus_trader.analysis.i18n import t
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.core.datetime import format_optional_iso8601
 from nautilus_trader.core.nautilus_pyo3 import NAUTILUS_VERSION
@@ -340,14 +341,19 @@ def create_tearsheet(  # noqa: C901
         currency=currency,
     )
 
+    # Determine locale from config
+    locale = "en"
+    if config is not None:
+        locale = getattr(config, "locale", "en")
+
     # Build title with strategy name(s) and run time
     if title == "NautilusTrader Backtest Results":
         strategies = engine.trader.strategy_ids()
-        strategy_names = ", ".join(str(s) for s in strategies) if strategies else "None"
+        strategy_names = ", ".join(str(s) for s in strategies) if strategies else t("none", locale)
         run_started = format_optional_iso8601(engine.run_started)
 
-        title = f"<b>NautilusTrader</b> v{NAUTILUS_VERSION} - Backtest Results"
-        title += f"<br><sub>Strategies: {strategy_names} | Run started: {run_started}</sub>"
+        title = t("title_html", locale, version=NAUTILUS_VERSION)
+        title += f"<br><sub>{t('title_sub', locale, strategies=strategy_names, run_started=run_started)}</sub>"
 
     # Extract run information
     total_events = f"{engine.kernel.exec_engine.event_count:_}"
@@ -367,18 +373,19 @@ def create_tearsheet(  # noqa: C901
     if engine.backtest_start and engine.backtest_end:
         backtest_range = str(engine.backtest_end - engine.backtest_start)
 
+    na = t("not_available", locale)
     run_info = {
-        "Run ID": str(engine.run_id),
-        "Run started": str(engine.run_started) if engine.run_started else "N/A",
-        "Run finished": str(engine.run_finished) if engine.run_finished else "N/A",
-        "Elapsed time": elapsed_time,
-        "Backtest start": str(engine.backtest_start) if engine.backtest_start else "N/A",
-        "Backtest end": str(engine.backtest_end) if engine.backtest_end else "N/A",
-        "Backtest range": backtest_range,
-        "Iterations": f"{engine.iteration:_}",
-        "Total events": total_events,
-        "Total orders": total_orders,
-        "Total positions": total_positions,
+        t("run_id", locale): str(engine.run_id),
+        t("run_started", locale): str(engine.run_started) if engine.run_started else na,
+        t("run_finished", locale): str(engine.run_finished) if engine.run_finished else na,
+        t("elapsed_time", locale): elapsed_time,
+        t("backtest_start", locale): str(engine.backtest_start) if engine.backtest_start else na,
+        t("backtest_end", locale): str(engine.backtest_end) if engine.backtest_end else na,
+        t("backtest_range", locale): backtest_range,
+        t("iterations", locale): f"{engine.iteration:_}",
+        t("total_events", locale): total_events,
+        t("total_orders", locale): total_orders,
+        t("total_positions", locale): total_positions,
     }
 
     # Determine which currencies to display
@@ -399,8 +406,8 @@ def create_tearsheet(  # noqa: C901
             starting = analyzer._account_balances_starting.get(curr)
             ending = analyzer._account_balances.get(curr)
             if starting and ending:
-                account_info[f"Starting balance ({curr})"] = starting.to_formatted_str()
-                account_info[f"Ending balance ({curr})"] = ending.to_formatted_str()
+                account_info[t("starting_balance", locale, currency=curr)] = starting.to_formatted_str()
+                account_info[t("ending_balance", locale, currency=curr)] = ending.to_formatted_str()
 
     # Get PnL stats for selected currencies
     all_stats_pnls = {}
@@ -1240,10 +1247,14 @@ def _create_tearsheet_figure(
     if benchmark_name == "Benchmark":  # Still using default value
         benchmark_name = config.benchmark_name
 
+    # Resolve locale from config
+    locale = getattr(config, "locale", "en")
+
     # Calculate dynamic grid layout based on selected charts
     rows, cols, specs, subplot_titles, heights, v_spacing, h_spacing = _calculate_grid_layout(
         config.charts,
         config.layout,
+        locale=locale,
     )
 
     # Create subplots with dynamic layout
@@ -1296,6 +1307,7 @@ def _create_tearsheet_figure(
                 run_info=run_info or {},
                 account_info=account_info or {},
                 engine=engine,
+                locale=locale,
                 **chart_kwargs,
             )
 
@@ -1319,6 +1331,7 @@ def _create_stats_table(  # noqa: C901
     theme_config: dict[str, Any] | None = None,
     run_info: dict[str, Any] | None = None,
     account_info: dict[str, Any] | None = None,
+    locale: str = "en",
 ) -> go.Table:
     """
     Create performance statistics table with section headers.
@@ -1395,20 +1408,20 @@ def _create_stats_table(  # noqa: C901
         if first_value is not None and isinstance(first_value, dict):
             # Per-currency PnL stats
             for currency, curr_stats in stats_pnls.items():
-                add_section(f"PnL Statistics ({currency})", curr_stats)
+                add_section(t("pnl_statistics_currency", locale, currency=currency), curr_stats)
         else:
             # Single currency PnL stats
-            add_section("PnL Statistics", stats_pnls)
+            add_section(t("pnl_statistics", locale), stats_pnls)
 
     # 4. Returns Statistics
-    add_section("Returns Statistics", stats_returns)
+    add_section(t("returns_statistics", locale), stats_returns)
 
     # 5. General/Position Statistics
-    add_section("General Statistics", stats_general)
+    add_section(t("general_statistics", locale), stats_general)
 
     return go.Table(
         header={
-            "values": ["<b>Metric</b>", "<b>Value</b>"],
+            "values": [f"<b>{t('metric', locale)}</b>", f"<b>{t('value', locale)}</b>"],
             "fill_color": theme_config["colors"]["primary"],
             "font": {"color": "white", "size": 12},
             "align": "left",
@@ -1463,18 +1476,20 @@ def _render_run_info(
             else:
                 fill_colors.append(theme_config["colors"]["table_row_even"])
 
+    locale = kwargs.get("locale", "en")
+
     # Add run info and account info
     if run_info:
-        add_section("Run Information", run_info)
+        add_section(t("run_information", locale), run_info)
     if account_info:
-        add_section("Account Summary", account_info)
+        add_section(t("account_summary", locale), account_info)
 
     if not metrics:  # No data to display
         return
 
     run_info_table = go.Table(
         header={
-            "values": ["<b>Metric</b>", "<b>Value</b>"],
+            "values": [f"<b>{t('metric', locale)}</b>", f"<b>{t('value', locale)}</b>"],
             "fill_color": theme_config["colors"]["primary"],
             "font": {"color": "white", "size": 12},
             "align": "left",
@@ -1502,6 +1517,7 @@ def _render_stats_table(
     """
     Render performance statistics table (PnL, Returns, General).
     """
+    locale = kwargs.get("locale", "en")
     stats_table = _create_stats_table(
         stats_pnls,
         stats_returns,
@@ -1509,6 +1525,7 @@ def _render_stats_table(
         theme_config,
         run_info=None,  # Don't include run info here
         account_info=None,  # Don't include account info here
+        locale=locale,
     )
     fig.add_trace(stats_table, row=row, col=col)
 
@@ -1529,13 +1546,14 @@ def _render_equity(
     if returns.empty:
         return
 
+    locale = kwargs.get("locale", "en")
     equity = (1 + returns).cumprod()
     fig.add_trace(
         go.Scatter(
             x=equity.index,
             y=equity.values,
             mode="lines",
-            name="Strategy",
+            name=t("strategy", locale),
             line={"color": theme_config["colors"]["primary"], "width": 2},
             showlegend=benchmark_returns is not None,
         ),
@@ -1558,8 +1576,8 @@ def _render_equity(
             col=col,
         )
 
-    fig.update_xaxes(title_text="Date", row=row, col=col)
-    fig.update_yaxes(title_text="Equity", row=row, col=col)
+    fig.update_xaxes(title_text=t("date", locale), row=row, col=col)
+    fig.update_yaxes(title_text=t("equity", locale), row=row, col=col)
 
 
 def _render_drawdown(
@@ -1573,6 +1591,7 @@ def _render_drawdown(
     """
     Render drawdown chart.
     """
+    locale = kwargs.get("locale", "en")
     drawdown = _calculate_drawdown(returns)
     neg_color = theme_config["colors"]["negative"]
 
@@ -1581,7 +1600,7 @@ def _render_drawdown(
             x=drawdown.index,
             y=drawdown.values,
             mode="lines",
-            name="Drawdown",
+            name=t("drawdown", locale),
             fill="tozeroy",
             line={"color": neg_color, "width": 1},
             fillcolor=_hex_to_rgba(neg_color, 0.3),  # 30% opacity
@@ -1591,8 +1610,8 @@ def _render_drawdown(
         col=col,
     )
 
-    fig.update_xaxes(title_text="Date", row=row, col=col)
-    fig.update_yaxes(title_text="Drawdown (%)", row=row, col=col)
+    fig.update_xaxes(title_text=t("date", locale), row=row, col=col)
+    fig.update_yaxes(title_text=t("drawdown_pct", locale), row=row, col=col)
 
 
 def _render_monthly_returns(
@@ -1608,6 +1627,7 @@ def _render_monthly_returns(
     if returns.empty:
         return
 
+    locale = kwargs.get("locale", "en")
     monthly = returns.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
     monthly_pivot = pd.DataFrame(
         {
@@ -1649,10 +1669,11 @@ def _render_monthly_returns(
         col=col,
     )
 
-    fig.update_xaxes(title_text="Month", row=row, col=col)
-    fig.update_yaxes(title_text="Year", row=row, col=col)
+    fig.update_xaxes(title_text=t("month", locale), row=row, col=col)
+    fig.update_yaxes(title_text=t("year", locale), row=row, col=col)
 
 
+def _render_distribution(
 def _render_distribution(
     fig: go.Figure,
     row: int,
@@ -1667,11 +1688,12 @@ def _render_distribution(
     if returns.empty:
         return
 
+    locale = kwargs.get("locale", "en")
     fig.add_trace(
         go.Histogram(
             x=returns.to_numpy() * 100,
             nbinsx=50,
-            name="Returns",
+            name=t("returns", locale),
             marker={"color": theme_config["colors"]["primary"]},
             showlegend=False,
         ),
@@ -1679,8 +1701,8 @@ def _render_distribution(
         col=col,
     )
 
-    fig.update_xaxes(title_text="Return (%)", row=row, col=col)
-    fig.update_yaxes(title_text="Frequency", row=row, col=col)
+    fig.update_xaxes(title_text=t("return_pct", locale), row=row, col=col)
+    fig.update_yaxes(title_text=t("frequency", locale), row=row, col=col)
 
 
 def _render_rolling_sharpe(
@@ -1698,6 +1720,7 @@ def _render_rolling_sharpe(
     if returns.empty or len(returns) < window:
         return
 
+    locale = kwargs.get("locale", "en")
     rolling_mean = returns.rolling(window=window).mean()
     rolling_std = returns.rolling(window=window).std()
     rolling_sharpe = (rolling_mean / rolling_std.replace(0, float("nan"))) * (
@@ -1709,7 +1732,7 @@ def _render_rolling_sharpe(
             x=rolling_sharpe.index,
             y=rolling_sharpe.values,
             mode="lines",
-            name="Rolling Sharpe",
+            name=t("rolling_sharpe", locale),
             line={"color": theme_config["colors"]["positive"], "width": 2},
             showlegend=False,
         ),
@@ -1721,8 +1744,8 @@ def _render_rolling_sharpe(
     # Note: We can't use fig.add_hline with subplots, need to use shapes
     # This will be handled in the main function
 
-    fig.update_xaxes(title_text="Date", row=row, col=col)
-    fig.update_yaxes(title_text="Sharpe Ratio", row=row, col=col)
+    fig.update_xaxes(title_text=t("date", locale), row=row, col=col)
+    fig.update_yaxes(title_text=t("sharpe_ratio", locale), row=row, col=col)
 
 
 def _render_yearly_returns(
@@ -1739,6 +1762,7 @@ def _render_yearly_returns(
     if returns.empty:
         return
 
+    locale = kwargs.get("locale", "en")
     yearly = returns.resample("YE").apply(lambda x: (1 + x).prod() - 1) * 100
     colors = [
         theme_config["colors"]["positive"] if r >= 0 else theme_config["colors"]["negative"]
@@ -1756,8 +1780,8 @@ def _render_yearly_returns(
         col=col,
     )
 
-    fig.update_xaxes(title_text="Year", row=row, col=col)
-    fig.update_yaxes(title_text="Return (%)", row=row, col=col)
+    fig.update_xaxes(title_text=t("year", locale), row=row, col=col)
+    fig.update_yaxes(title_text=t("return_pct", locale), row=row, col=col)
 
 
 def create_bars_with_fills(
@@ -1946,6 +1970,8 @@ def _render_bars_with_fills(  # noqa: C901
             fills_df["last_qty"] = pd.to_numeric(fills_df["last_qty"], errors="coerce")
             fills_df["last_px"] = pd.to_numeric(fills_df["last_px"], errors="coerce")
 
+    locale = kwargs.get("locale", "en")
+
     # Add candlestick chart
     fig.add_trace(
         go.Candlestick(
@@ -1954,7 +1980,7 @@ def _render_bars_with_fills(  # noqa: C901
             high=bars_df["high"],
             low=bars_df["low"],
             close=bars_df["close"],
-            name="OHLC",
+            name=t("ohlc", locale),
             showlegend=False,
         ),
         row=row,
@@ -1987,7 +2013,7 @@ def _render_bars_with_fills(  # noqa: C901
             col=col,
             marker_symbol="triangle-up",
             marker_color=_hex_to_rgba(positive_color, 0.7),
-            name="Buy Fills",
+            name=t("buy_fills", locale),
         )
 
         # Add sell fills (using theme negative color)
@@ -1998,17 +2024,17 @@ def _render_bars_with_fills(  # noqa: C901
             col=col,
             marker_symbol="triangle-down",
             marker_color=_hex_to_rgba(negative_color, 0.7),
-            name="Sell Fills",
+            name=t("sell_fills", locale),
         )
 
     # Update axes with rangeslider for time navigation
     fig.update_xaxes(
-        title_text="Time",
+        title_text=t("time", locale),
         row=row,
         col=col,
         rangeslider={"visible": True},
     )
-    fig.update_yaxes(title_text="Price", row=row, col=col)
+    fig.update_yaxes(title_text=t("price", locale), row=row, col=col)
     fig.update_yaxes(fixedrange=False, row=row, col=col)
 
 
@@ -2098,6 +2124,7 @@ def _register_tearsheet_chart(
 def _calculate_grid_layout(
     charts: list[TearsheetChart],
     custom_layout: Any = None,
+    locale: str = "en",
 ) -> tuple[int, int, list, list[str], list[float], float, float]:
     """
     Calculate dynamic grid layout based on selected charts.
@@ -2108,6 +2135,8 @@ def _calculate_grid_layout(
         List of chart objects to include (in order).
     custom_layout : GridLayout, optional
         Custom layout specification.
+    locale : str, default "en"
+        Locale code for translating subplot titles.
 
     Returns
     -------
@@ -2157,7 +2186,9 @@ def _calculate_grid_layout(
                 chart_name = chart.name
                 spec = _TEARSHEET_CHART_SPECS.get(chart_name, {})
                 subplot_type = spec.get("type", "scatter")
-                default_title = spec.get("title", chart_name.replace("_", " ").title())
+                # Resolve i18n key to translated title
+                i18n_key = spec.get("title", chart_name)
+                default_title = t(i18n_key, locale)
                 title = chart.title or default_title
 
                 row_specs.append({"type": subplot_type})
@@ -2181,22 +2212,23 @@ register_chart("yearly_returns", create_yearly_returns)
 register_chart("bars_with_fills", create_bars_with_fills)
 
 # Register built-in charts for tearsheet integration
-_register_tearsheet_chart("run_info", "table", "Run Information", _render_run_info)
-_register_tearsheet_chart("stats_table", "table", "Performance Statistics", _render_stats_table)
-_register_tearsheet_chart("equity", "scatter", "Equity Curve", _render_equity)
-_register_tearsheet_chart("drawdown", "scatter", "Drawdown", _render_drawdown)
-_register_tearsheet_chart("monthly_returns", "heatmap", "Monthly Returns", _render_monthly_returns)
-_register_tearsheet_chart("distribution", "histogram", "Returns Distribution", _render_distribution)
+# Note: titles are i18n keys, resolved via t() in _calculate_grid_layout
+_register_tearsheet_chart("run_info", "table", "run_information", _render_run_info)
+_register_tearsheet_chart("stats_table", "table", "performance_statistics", _render_stats_table)
+_register_tearsheet_chart("equity", "scatter", "equity_curve", _render_equity)
+_register_tearsheet_chart("drawdown", "scatter", "drawdown", _render_drawdown)
+_register_tearsheet_chart("monthly_returns", "heatmap", "monthly_returns", _render_monthly_returns)
+_register_tearsheet_chart("distribution", "histogram", "returns_distribution", _render_distribution)
 _register_tearsheet_chart(
     "rolling_sharpe",
     "scatter",
-    "Rolling Sharpe Ratio (60-day)",
+    "rolling_sharpe_ratio",
     _render_rolling_sharpe,
 )
-_register_tearsheet_chart("yearly_returns", "bar", "Yearly Returns", _render_yearly_returns)
+_register_tearsheet_chart("yearly_returns", "bar", "yearly_returns", _render_yearly_returns)
 _register_tearsheet_chart(
     "bars_with_fills",
     "scatter",
-    "Bars with Order Fills",
+    "bars_with_fills",
     _render_bars_with_fills,
 )

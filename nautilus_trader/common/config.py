@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import os
 from collections.abc import Callable
 from decimal import Decimal
 from io import StringIO
@@ -356,6 +357,46 @@ class DatabaseConfig(NautilusConfig, frozen=True):
     exponent_base: int = 2
     max_delay: int = 1000
     factor: int = 2
+
+    @classmethod
+    def from_env(cls, **overrides: Any) -> DatabaseConfig:
+        """
+        Create a ``DatabaseConfig`` from environment variables.
+
+        Reads the following environment variables (with fallback to defaults):
+        - REDIS_HOST: Redis host address (default: 127.0.0.1)
+        - REDIS_PORT: Redis port (default: 6379)
+        - REDIS_USERNAME: Redis username (default: None)
+        - REDIS_PASSWORD: Redis password (default: None)
+        - REDIS_SSL: Whether to use SSL (default: False)
+
+        Any additional keyword arguments will override the environment variable values.
+
+        Returns
+        -------
+        DatabaseConfig
+
+        """
+        host = os.environ.get("REDIS_HOST")
+        port = os.environ.get("REDIS_PORT")
+        username = os.environ.get("REDIS_USERNAME")
+        password = os.environ.get("REDIS_PASSWORD")
+        ssl = os.environ.get("REDIS_SSL")
+
+        kwargs: dict[str, Any] = {}
+        if host is not None:
+            kwargs["host"] = host
+        if port is not None:
+            kwargs["port"] = int(port)
+        if username is not None:
+            kwargs["username"] = username
+        if password is not None:
+            kwargs["password"] = password
+        if ssl is not None:
+            kwargs["ssl"] = ssl.lower() in ("true", "1", "yes")
+
+        kwargs.update(overrides)
+        return cls(**kwargs)
 
     def __repr__(self) -> str:
         redacted_password = "***" if self.password is not None else "None"

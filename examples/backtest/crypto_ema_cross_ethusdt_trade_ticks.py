@@ -117,19 +117,29 @@ if __name__ == "__main__":
         from nautilus_trader.analysis import TearsheetConfig
         from nautilus_trader.analysis.tearsheet import create_tearsheet
 
-        print("\nGenerating tearsheet...")
-
         # Try different themes: "plotly_white", "plotly_dark", "nautilus", "nautilus_dark"
-        tearsheet_config = TearsheetConfig(theme="plotly_white")  # Change this to test themes!
+        # Try different locales: "en" (English), "zh_CN" (Simplified Chinese)
 
+        # --- English tearsheet ---
+        print("\nGenerating English tearsheet...")
+        tearsheet_config_en = TearsheetConfig(theme="plotly_white", locale="en")
         create_tearsheet(
             engine=engine,
-            output_path="crypto_ethusdt_tearsheet.html",
-            config=tearsheet_config,
+            output_path="crypto_ethusdt_tearsheet_en.html",
+            config=tearsheet_config_en,
         )
-        print("Tearsheet saved to: crypto_ethusdt_tearsheet.html")
-        print(f"Theme: {tearsheet_config.theme}")
-        print("Open this file in your browser to view interactive charts!")
+        print("Tearsheet saved to: crypto_ethusdt_tearsheet_en.html (English)")
+
+        # --- Chinese tearsheet ---
+        print("Generating Chinese tearsheet...")
+        tearsheet_config_zh = TearsheetConfig(theme="plotly_white", locale="zh_CN")
+        create_tearsheet(
+            engine=engine,
+            output_path="crypto_ethusdt_tearsheet_zh.html",
+            config=tearsheet_config_zh,
+        )
+        print("Tearsheet saved to: crypto_ethusdt_tearsheet_zh.html (中文)")
+        print("Open these files in your browser to view interactive charts!")
     except ImportError:
         print("\nPlotly not installed. Install with: pip install plotly>=6.3.1")
         print("  Then re-run to generate tearsheets.")

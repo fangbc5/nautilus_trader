@@ -196,6 +196,10 @@ class TearsheetConfig(NautilusConfig, frozen=True, kw_only=True):
         Total height of the tearsheet in pixels.
     show_logo : bool, default True
         Whether to display NautilusTrader logo in the tearsheet.
+    locale : str, default "en"
+        Locale code for internationalization of report labels.
+        Available locales: "en" (English), "zh_CN" (Simplified Chinese).
+        New locales can be added by creating JSON files in the ``locales/`` directory.
 
     """
 
@@ -207,6 +211,7 @@ class TearsheetConfig(NautilusConfig, frozen=True, kw_only=True):
     benchmark_name: str = "Benchmark"
     height: PositiveInt = 1500
     show_logo: bool = True
+    locale: str = "en"
 
     @property
     def chart_names(self) -> list[str]:
