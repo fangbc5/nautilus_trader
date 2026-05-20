@@ -73,7 +73,100 @@ def _write_figure(fig: go.Figure, output_path: str) -> None:
     if suffix in _STATIC_IMAGE_SUFFIXES:
         fig.write_image(output_path)
     else:
-        fig.write_html(output_path)
+        html_str = fig.to_html()
+        # Inject JavaScript to convert UTC timestamps to browser's local timezone
+        html_str = _inject_timezone_script(html_str)
+        Path(output_path).write_text(html_str, encoding="utf-8")
+
+
+def _utc_to_local_str(utc_str: str) -> str:
+    """
+    Convert a UTC timestamp string to local timezone string.
+
+    Parameters
+    ----------
+    utc_str : str
+        UTC timestamp string (e.g., "2020-08-14 10:32:37.428000+00:00").
+
+    Returns
+    -------
+    str
+        Local timezone formatted string (e.g., "2020-08-14 18:32:37").
+
+    """
+    try:
+        import dateutil.parser
+
+        dt = dateutil.parser.parse(utc_str)
+        local_dt = dt.astimezone(None)  # None = system local timezone
+        return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return utc_str
+
+
+def _inject_timezone_script(html_str: str) -> str:
+    """
+    Inject JavaScript that converts UTC timestamps in Plotly table cells
+    to the browser's local timezone on page load.
+
+    This uses a MutationObserver to catch Plotly's SVG-rendered text nodes,
+    since Plotly tables render as SVG elements that are not accessible via
+    regular DOM text node walking.
+
+    Parameters
+    ----------
+    html_str : str
+        The HTML string to inject the script into.
+
+    Returns
+    -------
+    str
+        The HTML string with the timezone conversion script added.
+
+    """
+    tz_script = """<script>
+(function() {
+  function convertUTC(text) {
+    return text.replace(
+      /\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:\\+00:?00|Z)/g,
+      function(s) {
+        try {
+          var d = new Date(s.replace(' ', 'T'));
+          if (!isNaN(d.getTime())) {
+            return d.getFullYear() + '-' +
+              String(d.getMonth()+1).padStart(2,'0') + '-' +
+              String(d.getDate()).padStart(2,'0') + ' ' +
+              String(d.getHours()).padStart(2,'0') + ':' +
+              String(d.getMinutes()).padStart(2,'0') + ':' +
+              String(d.getSeconds()).padStart(2,'0');
+          }
+        } catch(e) {}
+        return s;
+      }
+    );
+  }
+  function patchSVG() {
+    var texts = document.querySelectorAll('.plotly svg text, .js-plotly-plot svg text');
+    texts.forEach(function(el) {
+      if (el.textContent && (el.textContent.indexOf('+00:') !== -1 || el.textContent.indexOf('T00:00:00Z') !== -1)) {
+        el.textContent = convertUTC(el.textContent);
+      }
+    });
+  }
+  function run() {
+    patchSVG();
+    setTimeout(patchSVG, 500);
+    setTimeout(patchSVG, 1500);
+    setTimeout(patchSVG, 3000);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(run, 300); });
+  } else {
+    setTimeout(run, 300);
+  }
+})();
+</script>"""
+    return html_str.replace("</body>", tz_script + "\n</body>")
 
 
 def _hex_to_rgba(hex_color: str, alpha: float = 1.0) -> str:
@@ -354,7 +447,7 @@ def create_tearsheet(  # noqa: C901
         run_started = format_optional_iso8601(engine.run_started)
 
         title = t("title_html", locale, version=NAUTILUS_VERSION)
-        title += f"<br><sub>{t('title_sub', locale, strategies=strategy_names, run_started=run_started)}</sub>"
+        title += f"<br><sub>{t('title_sub', locale, strategies=strategy_names, run_started=_utc_to_local_str(run_started))}</sub>"
 
     # Extract run information
     total_events = f"{engine.kernel.exec_engine.event_count:_}"
@@ -377,11 +470,11 @@ def create_tearsheet(  # noqa: C901
     na = t("not_available", locale)
     run_info = {
         t("run_id", locale): str(engine.run_id),
-        t("run_started", locale): str(engine.run_started) if engine.run_started else na,
-        t("run_finished", locale): str(engine.run_finished) if engine.run_finished else na,
+        t("run_started", locale): _utc_to_local_str(str(engine.run_started)) if engine.run_started else na,
+        t("run_finished", locale): _utc_to_local_str(str(engine.run_finished)) if engine.run_finished else na,
         t("elapsed_time", locale): elapsed_time,
-        t("backtest_start", locale): str(engine.backtest_start) if engine.backtest_start else na,
-        t("backtest_end", locale): str(engine.backtest_end) if engine.backtest_end else na,
+        t("backtest_start", locale): _utc_to_local_str(str(engine.backtest_start)) if engine.backtest_start else na,
+        t("backtest_end", locale): _utc_to_local_str(str(engine.backtest_end)) if engine.backtest_end else na,
         t("backtest_range", locale): backtest_range,
         t("iterations", locale): f"{engine.iteration:_}",
         t("total_events", locale): total_events,
@@ -1156,7 +1249,7 @@ def create_yearly_returns(
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
-            x=[f"{y.year}.{y.month:02d}" for y in yearly.index],
+            x=[str(y.year) for y in yearly.index],
             y=yearly.values,
             marker={"color": colors},
             hovertemplate="<b>%{x}</b><br>Return: %{y:.2f}%<extra></extra>",
@@ -1772,7 +1865,7 @@ def _render_yearly_returns(
 
     fig.add_trace(
         go.Bar(
-            x=[f"{y.year}.{y.month:02d}" for y in yearly.index],
+            x=[str(y.year) for y in yearly.index],
             y=yearly.to_numpy(),
             marker={"color": colors},
             showlegend=False,
