@@ -347,6 +347,89 @@ class TurnoverRateFactor(Factor):
         return tr.where(mask, other=float("nan"))
 
 
+class AIFactor(Factor):
+    """
+    AI/ML factor base class for integrating machine learning models.
+
+    Subclass this to create factors powered by:
+    - scikit-learn models (XGBoost, LightGBM, etc.)
+    - PyTorch / TensorFlow neural networks
+    - LLM-based analysis (sentiment, fundamentals)
+    - Any Python ML framework
+
+    Usage
+    -----
+    >>> class MyXGBoostFactor(AIFactor):
+    ...     def __init__(self, model_path="model.json"):
+    ...         self._model = xgboost.Booster()
+    ...         self._model.load_model(model_path)
+    ...
+    ...     @property
+    ...     def name(self) -> str:
+    ...         return "xgboost_alpha"
+    ...
+    ...     def evaluate(self, data: pd.DataFrame) -> pd.Series:
+    ...         features = self._prepare_features(data)
+    ...         predictions = self._model.predict(xgb.DMatrix(features))
+    ...         return pd.Series(predictions, index=data.index)
+    ...
+    ...     def _prepare_features(self, data: pd.DataFrame) -> pd.DataFrame:
+    ...         return data[["pe", "pb", "roe", "revenue_growth"]].fillna(0)
+    """
+
+    @property
+    def name(self) -> str:
+        return "ai_factor"
+
+    @property
+    def direction(self) -> str:
+        return "descending"  # Higher AI score = better
+
+    def evaluate(self, data: pd.DataFrame) -> pd.Series:
+        """
+        Evaluate AI factor.
+
+        Override this method to integrate your ML model.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Stock data with fundamental/technical columns.
+
+        Returns
+        -------
+        pd.Series
+            AI model predictions/scores indexed by stock symbol.
+        """
+        raise NotImplementedError(
+            "Subclass AIFactor and implement evaluate() with your ML model. "
+            "Example: return pd.Series(model.predict(features), index=data.index)"
+        )
+
+    def train(self, data: pd.DataFrame, labels: pd.Series) -> None:
+        """
+        Train the AI model (optional).
+
+        Override to implement model training logic.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Training features.
+        labels : pd.Series
+            Target labels (e.g. future returns).
+        """
+        raise NotImplementedError("Override train() to implement model training")
+
+    def save(self, path: str) -> None:
+        """Save model to disk (optional)."""
+        raise NotImplementedError("Override save() to persist model")
+
+    def load_model(self, path: str) -> None:
+        """Load model from disk (optional)."""
+        raise NotImplementedError("Override load_model() to restore model")
+
+
 # Factor Registry
 FACTOR_REGISTRY: dict[str, type[Factor]] = {
     "pe": PEFactor,
@@ -358,6 +441,7 @@ FACTOR_REGISTRY: dict[str, type[Factor]] = {
     "late_day_surge": LateDaySurgeFactor,
     "late_day_volume": LateDayVolumeFactor,
     "turnover_rate": TurnoverRateFactor,
+    "ai": AIFactor,
 }
 
 

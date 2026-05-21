@@ -1,108 +1,34 @@
+#!/usr/bin/env python3
 # -------------------------------------------------------------------------------------------------
 #  NautilusTrader Stock Screener - Data Providers
 # -------------------------------------------------------------------------------------------------
 """
 Data providers for the stock screener.
 
-Currently supports A-Share market via Tushare.
+Provides a unified interface for backtest and live modes:
+- CachedScreenerProvider: Backtest mode, reads from pre-loaded Parquet cache
+- LiveScreenerProvider: Live mode, calls Tushare/AKShare API in real-time
+- DemoDataProvider: Testing with synthetic data
 """
 
 from __future__ import annotations
 
 import os
+from abc import ABC
+from abc import abstractmethod
 
 import pandas as pd
 
 
-class AShareScreenerDataProvider:
+class ScreenerDataProvider(ABC):
     """
-    A-Share stock data provider for screening.
+    Abstract base class for screener data providers.
 
-    Fetches fundamental and technical data from Tushare API.
-
-    Usage
-    -----
-    >>> provider = AShareScreenerDataProvider(tushare_token="your_token")
-    >>> data = provider.get_screening_data(date="20240101")
-    >>> # data is a DataFrame with columns: pe, pb, roe, revenue_growth, volume_ratio, ...
+    Implementations must provide screening data (PE, PB, ROE, etc.)
+    for a given date. The same interface is used in backtest and live mode.
     """
 
-    def __init__(self, tushare_token: str | None = None) -> None:
-        self._token = tushare_token or os.getenv("TUSHARE_TOKEN", "")
-        if not self._token:
-            raise ValueError(
-                "Tushare token required. Set TUSHARE_TOKEN env var or pass tushare_token parameter."
-            )
-
-    def _get_pro(self):
-        """Get Tushare pro API client."""
-        import tushare as ts
-        ts.set_token(self._token)
-        return ts.pro_api()
-
-    def get_basic_info(self, date: str) -> pd.DataFrame:
-        """
-        Get basic stock info for all A-shares.
-
-        Parameters
-        ----------
-        date : str
-            Trade date in YYYYMMDD format.
-
-        Returns
-        -------
-        pd.DataFrame
-            Columns: ts_code, symbol, name, area, industry, market, list_date
-
-        """
-        pro = self._get_pro()
-        df = pro.stock_basic(
-            exchange="",
-            list_status="L",
-            fields="ts_code,symbol,name,area,industry,market,list_date",
-        )
-        return df
-
-    def get_daily_basic(self, date: str) -> pd.DataFrame:
-        """
-        Get daily fundamental data.
-
-        Parameters
-        ----------
-        date : str
-            Trade date in YYYYMMDD format.
-
-        Returns
-        -------
-        pd.DataFrame
-            Columns: ts_code, pe, pb, dv_ratio, total_mv, circ_mv
-
-        """
-        pro = self._get_pro()
-        df = pro.daily_basic(
-            trade_date=date,
-            fields="ts_code,trade_date,pe,pb,dv_ratio,total_mv,circ_mv,turnover_rate",
-        )
-        return df
-
-    def get_financial_indicator(self, date: str) -> pd.DataFrame:
-        """
-        Get financial indicators (quarterly).
-
-        Returns columns including roe, revenue growth, etc.
-        """
-        pro = self._get_pro()
-        # Get recent financial data
-        df = pro.fina_indicator(
-            period=date[:6],
-            fields="ts_code,ann_date,roe,revenue_growth,tr_yoy,update_flag",
-        )
-        if df.empty:
-            return df
-        # Keep only latest announcement per stock
-        df = df.sort_values("ann_date").groupby("ts_code").last().reset_index()
-        return df[["ts_code", "roe", "revenue_growth"]]
-
+    @abstractmethod
     def get_screening_data(self, date: str) -> pd.DataFrame:
         """
         Get comprehensive screening data for all A-shares on a given date.
@@ -115,59 +41,166 @@ class AShareScreenerDataProvider:
         Returns
         -------
         pd.DataFrame
-            Combined data with columns: pe, pb, roe, revenue_growth, total_mv, turnover_rate, name, industry
+            Columns: pe, pb, roe, revenue_growth, total_mv, turnover_rate, name, industry
             Index is 6-digit stock symbol.
-
         """
-        print(f"  [Screener] Fetching basic info...")
-        basic = self.get_basic_info(date)
 
-        print(f"  [Screener] Fetching daily fundamentals for {date}...")
-        daily = self.get_daily_basic(date)
+    @abstractmethod
+    def get_available_dates(self) -> list[str]:
+        """Get list of available trade dates (YYYYMMDD format)."""
 
-        if daily.empty:
+
+class CachedScreenerProvider(ScreenerDataProvider):
+    """
+    Backtest-mode provider: reads from pre-loaded Parquet cache files.
+
+    Usage
+    -----
+    >>> provider = CachedScreenerProvider(cache_dir="~/.nautilus/ashare_cache")
+    >>> data = provider.get_screening_data("20240101")
+    """
+
+    def __init__(self, cache_dir: str | None = None) -> None:
+        self._cache_dir = cache_dir or os.path.expanduser("~/.nautilus/ashare_cache")
+        self._date_cache: list[str] | None = None
+
+    def get_screening_data(self, date: str) -> pd.DataFrame:
+        path = os.path.join(self._cache_dir, f"screening_{date}.parquet")
+        if os.path.exists(path):
+            return pd.read_parquet(path)
+
+        # Fallback: try live provider
+        try:
+            provider = LiveScreenerProvider()
+            data = provider.get_screening_data(date)
+            if not data.empty:
+                os.makedirs(self._cache_dir, exist_ok=True)
+                data.to_parquet(path)
+            return data
+        except Exception:
+            return pd.DataFrame()
+
+    def get_available_dates(self) -> list[str]:
+        if self._date_cache is not None:
+            return self._date_cache
+        import glob
+        files = glob.glob(os.path.join(self._cache_dir, "screening_*.parquet"))
+        dates = sorted(f.split("_")[-1].replace(".parquet", "") for f in files)
+        self._date_cache = dates
+        return dates
+
+    def preCache(self, dates: list[str], provider: ScreenerDataProvider) -> None:
+        """Pre-cache screening data for backtest dates."""
+        os.makedirs(self._cache_dir, exist_ok=True)
+        for date in dates:
+            path = os.path.join(self._cache_dir, f"screening_{date}.parquet")
+            if os.path.exists(path):
+                continue
+            print(f"  Pre-caching screening data for {date}...")
+            data = provider.get_screening_data(date)
+            if not data.empty:
+                data.to_parquet(path)
+        self._date_cache = None
+
+
+class LiveScreenerProvider(ScreenerDataProvider):
+    """
+    Live-mode provider: calls Tushare API in real-time.
+
+    Usage
+    -----
+    >>> provider = LiveScreenerProvider(tushare_token="your_token")
+    >>> data = provider.get_screening_data("20240101")
+    """
+
+    def __init__(self, tushare_token: str | None = None) -> None:
+        self._token = tushare_token or os.getenv("TUSHARE_TOKEN", "")
+        if not self._token:
+            env_path = os.path.join(os.getcwd(), ".env")
+            if os.path.exists(env_path):
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("TUSHARE_TOKEN="):
+                            self._token = line.split("=", 1)[1].strip()
+                            break
+
+    def _get_pro(self):
+        """Get Tushare pro API client."""
+        import tushare as ts
+        if not self._token:
+            raise ValueError("Tushare token required. Set TUSHARE_TOKEN env var or pass tushare_token.")
+        ts.set_token(self._token)
+        return ts.pro_api()
+
+    def get_screening_data(self, date: str) -> pd.DataFrame:
+        """Get comprehensive screening data for all A-shares on a given date."""
+        print(f"  [Screener] Fetching screening data for {date}...")
+        try:
+            pro = self._get_pro()
+        except (ImportError, ValueError) as e:
+            print(f"  [Screener] WARNING: {e}")
+            return pd.DataFrame()
+
+        basic = pro.stock_basic(
+            exchange="", list_status="L",
+            fields="ts_code,symbol,name,area,industry,market,list_date",
+        )
+        daily = pro.daily_basic(
+            trade_date=date,
+            fields="ts_code,trade_date,pe,pb,dv_ratio,total_mv,circ_mv,turnover_rate",
+        )
+        if daily is None or daily.empty:
             print(f"  [Screener] WARNING: No daily data for {date}. Market may be closed.")
             return pd.DataFrame()
 
-        print(f"  [Screener] Fetching financial indicators...")
         try:
-            fina = self.get_financial_indicator(date)
+            fina = pro.fina_indicator(
+                period=date[:6],
+                fields="ts_code,ann_date,roe,revenue_growth,tr_yoy,update_flag",
+            )
+            if fina is not None and not fina.empty:
+                fina = fina.sort_values("ann_date").groupby("ts_code").last().reset_index()
+                fina = fina[["ts_code", "roe", "revenue_growth"]]
+            else:
+                fina = pd.DataFrame(columns=["ts_code", "roe", "revenue_growth"])
         except Exception:
             fina = pd.DataFrame(columns=["ts_code", "roe", "revenue_growth"])
 
-        # Merge all data
         merged = daily.merge(basic[["ts_code", "symbol", "name", "industry", "list_date"]], on="ts_code", how="left")
-
         if not fina.empty:
             merged = merged.merge(fina, on="ts_code", how="left")
 
-        # Filter: exclude ST stocks
         merged = merged[~merged["name"].str.contains("ST", na=False)]
-
-        # Filter: exclude stocks listed less than 60 days
         if "list_date" in merged.columns:
-            list_cutoff = int(date) - 20000  # rough: 60 days
-            merged = merged[merged["list_date"].fillna("0").astype(str).str[:8].astype(int, errors="ignore") < list_cutoff]
-
-        # Filter: exclude PE < 0 or PE > 200 (loss-making or extreme)
+            list_cutoff = int(date) - 20000
+            merged = merged[
+                merged["list_date"].fillna("0").astype(str).str[:8].apply(
+                    lambda x: int(x) if x.isdigit() else 0
+                ) < list_cutoff
+            ]
         merged = merged[(merged["pe"] > 0) & (merged["pe"] < 200)]
-
-        # Set index to symbol
         merged = merged.set_index("symbol")
 
         print(f"  [Screener] {len(merged)} stocks after filtering")
         return merged
 
+    def get_available_dates(self) -> list[str]:
+        """Get recent trading dates from Tushare calendar."""
+        try:
+            pro = self._get_pro()
+            df = pro.trade_cal(exchange="SSE", is_open="1", limit=30)
+            if df is not None and not df.empty:
+                return sorted(df["cal_date"].tolist(), reverse=True)
+        except Exception:
+            pass
+        return []
 
-class DemoDataProvider:
-    """
-    Demo data provider with synthetic data for testing.
 
-    No API token required. Generates realistic-looking A-share data.
-    """
+class DemoDataProvider(ScreenerDataProvider):
+    """Demo data provider with synthetic data for testing."""
 
     def get_screening_data(self, date: str = "20240101") -> pd.DataFrame:
-        """Generate demo screening data for ~50 well-known A-share stocks."""
         stocks = {
             "600519": {"name": "贵州茅台", "industry": "白酒", "pe": 35.2, "pb": 12.1, "roe": 33.5, "revenue_growth": 18.2, "total_mv": 21000, "turnover_rate": 0.3},
             "000858": {"name": "五粮液", "industry": "白酒", "pe": 25.8, "pb": 7.8, "roe": 28.3, "revenue_growth": 15.6, "total_mv": 6800, "turnover_rate": 0.5},
@@ -200,7 +233,9 @@ class DemoDataProvider:
             "000651": {"name": "格力电器", "industry": "家电", "pe": 8.2, "pb": 2.5, "roe": 25.8, "revenue_growth": 5.2, "total_mv": 2100, "turnover_rate": 0.8},
             "601857": {"name": "中国石油", "industry": "石油", "pe": 10.2, "pb": 1.0, "roe": 10.5, "revenue_growth": 8.2, "total_mv": 15000, "turnover_rate": 0.2},
         }
-
         df = pd.DataFrame.from_dict(stocks, orient="index")
         df.index.name = "symbol"
         return df
+
+    def get_available_dates(self) -> list[str]:
+        return ["20240101", "20240201", "20240301", "20240401", "20240501"]
