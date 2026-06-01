@@ -430,6 +430,135 @@ class AIFactor(Factor):
         raise NotImplementedError("Override load_model() to restore model")
 
 
+class MarketCapFactor(Factor):
+    """
+    市值因子（散户核心优势：可以买机构买不了的小盘股）.
+
+    小市值股票获得更高评分，因为：
+    - 机构受流动性限制无法买入小盘股
+    - 小盘股弹性更大，隔日涨幅更高
+    - 散户资金量小，小盘股完全能满足需求
+    """
+
+    def __init__(
+        self,
+        min_mv: float = 30_000,      # 最小市值（万元，约30亿）
+        max_mv: float = 3_000_000,    # 最大市值（万元，约3000亿）
+        sweet_spot: float = 500_000,  # 最佳市值（万元，约500亿）
+        weight: float = 1.0,
+    ) -> None:
+        self.min_mv = min_mv
+        self.max_mv = max_mv
+        self.sweet_spot = sweet_spot
+        self._weight = weight
+
+    @property
+    def name(self) -> str:
+        return "market_cap"
+
+    @property
+    def direction(self) -> str:
+        return "ascending"  # Lower market cap = higher score (retail advantage)
+
+    @property
+    def weight(self) -> float:
+        return self._weight
+
+    def evaluate(self, data: pd.DataFrame) -> pd.Series:
+        col = "total_mv" if "total_mv" in data.columns else "market_cap"
+        if col not in data.columns:
+            return pd.Series(dtype=float)
+        mv = data[col].copy()
+        # Filter to range
+        mask = (mv >= self.min_mv) & (mv <= self.max_mv)
+        mv = mv.where(mask, other=float("nan"))
+        # Invert: smaller = better (use 1/mv as score proxy)
+        # But we want descending direction, so smaller mv → higher rank
+        return mv
+
+
+class MomentumFactor(Factor):
+    """
+    动量因子（散户优势：快速捕捉短期热点）.
+
+    Measures recent price momentum. Higher momentum = stronger uptrend.
+    Uses multi-day return to capture sustained trends.
+    """
+
+    def __init__(self, min_momentum: float = -5.0, weight: float = 1.0) -> None:
+        self.min_momentum = min_momentum
+        self._weight = weight
+
+    @property
+    def name(self) -> str:
+        return "momentum"
+
+    @property
+    def direction(self) -> str:
+        return "descending"  # Higher momentum = better
+
+    @property
+    def weight(self) -> float:
+        return self._weight
+
+    def evaluate(self, data: pd.DataFrame) -> pd.Series:
+        col = "pct_change" if "pct_change" in data.columns else "daily_return"
+        if col not in data.columns:
+            return pd.Series(dtype=float)
+        momentum = data[col].where(data[col] >= self.min_momentum, other=float("nan"))
+        return momentum
+
+
+class LimitUpFactor(Factor):
+    """
+    涨停溢价因子（散户独有视角）.
+
+    Stocks near limit-up (8-9.5%) tend to have next-day premium.
+    This is a unique retail edge as institutions can't chase limit-ups.
+    """
+
+    def __init__(self, near_limit_min: float = 7.0, near_limit_max: float = 9.5, weight: float = 1.0) -> None:
+        self.near_limit_min = near_limit_min
+        self.near_limit_max = near_limit_max
+        self._weight = weight
+
+    @property
+    def name(self) -> str:
+        return "limit_up"
+
+    @property
+    def direction(self) -> str:
+        return "descending"
+
+    @property
+    def weight(self) -> float:
+        return self._weight
+
+    def evaluate(self, data: pd.DataFrame) -> pd.Series:
+        col = "pct_change" if "pct_change" in data.columns else "daily_return"
+        if col not in data.columns:
+            return pd.Series(dtype=float)
+        pct = data[col]
+        # Score near-limit-up stocks highest
+        # 8-9.5% gets highest score, diminishes as we move away
+        score = pd.Series(0.0, index=data.index)
+        # Near limit-up zone
+        mask_near = (pct >= self.near_limit_min) & (pct <= self.near_limit_max)
+        score = score.where(~mask_near, other=pct)
+        # Strong momentum zone (5-8%)
+        mask_strong = (pct >= 5.0) & (pct < self.near_limit_min)
+        score = score.where(~mask_strong, other=pct * 0.8)
+        # Moderate zone
+        mask_mod = (pct >= 2.0) & (pct < 5.0)
+        score = score.where(~mask_mod, other=pct * 0.6)
+        # Weak zone
+        mask_weak = (pct >= 0) & (pct < 2.0)
+        score = score.where(~mask_weak, other=pct * 0.3)
+        # Negative
+        score = score.where(pct >= 0, other=float("nan"))
+        return score
+
+
 # Factor Registry
 FACTOR_REGISTRY: dict[str, type[Factor]] = {
     "pe": PEFactor,
@@ -441,6 +570,9 @@ FACTOR_REGISTRY: dict[str, type[Factor]] = {
     "late_day_surge": LateDaySurgeFactor,
     "late_day_volume": LateDayVolumeFactor,
     "turnover_rate": TurnoverRateFactor,
+    "market_cap": MarketCapFactor,
+    "momentum": MomentumFactor,
+    "limit_up": LimitUpFactor,
     "ai": AIFactor,
 }
 

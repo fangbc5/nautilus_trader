@@ -30,8 +30,8 @@ _THEMES: dict[str, dict[str, Any]] = {
         "template": "plotly_white",
         "colors": {
             "primary": "#4a4a4a",  # Dark gray for table headers
-            "positive": "#2ca02c",
-            "negative": "#d62728",
+            "positive": "#d62728",  # A股习惯: 红涨
+            "negative": "#2ca02c",  # A股习惯: 绿跌
             "neutral": "#7f7f7f",
             "background": "#ffffff",
             "grid": "#e0e0e0",
@@ -45,8 +45,8 @@ _THEMES: dict[str, dict[str, Any]] = {
         "template": "plotly_dark",
         "colors": {
             "primary": "#1f77b4",
-            "positive": "#2ca02c",
-            "negative": "#d62728",
+            "positive": "#d62728",  # 红涨
+            "negative": "#2ca02c",  # 绿跌
             "neutral": "#aaaaaa",
             "background": "#111111",
             "grid": "#333333",
@@ -60,8 +60,8 @@ _THEMES: dict[str, dict[str, Any]] = {
         "template": "plotly_white",
         "colors": {
             "primary": "#0066cc",
-            "positive": "#00cc66",
-            "negative": "#cc3300",
+            "positive": "#cc3300",  # 红涨
+            "negative": "#00cc66",  # 绿跌
             "neutral": "#666666",
             "background": "#ffffff",
             "grid": "#e8e8e8",
@@ -75,8 +75,8 @@ _THEMES: dict[str, dict[str, Any]] = {
         "template": "plotly_dark",
         "colors": {
             "primary": "#00cfbe",  # Signature teal/cyan
-            "positive": "#2fadd7",  # Sky blue for positive metrics
-            "negative": "#ff6b6b",  # Coral red (softer than harsh red)
+            "positive": "#ff6b6b",  # 红涨 (coral red)
+            "negative": "#2fadd7",  # 绿跌 (sky blue)
             "neutral": "#a7aab5",  # Brand gray for secondary elements
             "background": "#2a2a2d",  # Lighter dark gray background
             "grid": "#202022",  # Subtle grid
